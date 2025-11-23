@@ -2,11 +2,10 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org/doc/go1.25)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL%203.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/kitwork/work?color=green&label=Release)](https://github.com/kitwork/work/releases)
 
 **KitWork Engine** is the core automation engine behind [KitWork](https://github.com/kitwork/kitwork).  
 It provides the foundation for running, scheduling, and orchestrating workflows efficiently.
-
----
 
 ## Features
 
@@ -14,8 +13,6 @@ It provides the foundation for running, scheduling, and orchestrating workflows 
 - Modular architecture
 - Fully compatible with KitWork CLI and Work files
 - Open-source under AGPL-3.0
-
----
 
 ## Getting Started
 
@@ -41,14 +38,11 @@ func main() {
 }
 ```
 
----
-
 ## Source Access (AGPL Requirement)
 
 If you run this program on a network server, the **AGPL-3.0** requires that you make the source code of your modified version available to all users interacting with it remotely.
 For example, you can provide a "Source" link in your web interface or make it available via a network server.
 
----
 
 ## License
 
