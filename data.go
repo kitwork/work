@@ -13,13 +13,19 @@
 
 package work
 
-type Kind string
-
-const (
-	KindFull      Kind = "full"
-	KindShort     Kind = "short"
-	KindValue     Kind = "value"
-	KindList      Kind = "list"
-	KindPrimitive Kind = "primitive"
-	KindUnknown   Kind = "unknown"
+import (
+	"strings"
 )
+
+type Data map[string]interface{}
+
+var data = Data{}
+
+func (w *Work) Data(Name string, Source ...string) *Work {
+	if len(Source) > 0 && strings.TrimSpace(Name) != "" {
+		if _, ok := data[Name]; ok {
+
+		}
+	}
+	return w
+}

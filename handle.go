@@ -1,7 +1,21 @@
+// KitWork - Work Engine Core
+// Copyright (C) 2025 Huỳnh Nhân Quốc
+
+// This program is free software: you can redistribute it and/or modify it
+// under the terms of the GNU Affero General Public License version 3 (AGPL-3.0).
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+// You should have received a copy of the AGPL-3.0 License along with this program.
+// If not, see <https://www.gnu.org/licenses/agpl-3.0.html>
+
 package work
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -22,7 +36,7 @@ type Work struct {
 //  WORK RUNNER
 // ========================
 
-func (t *Work) Run(ctx *Context) (err error) {
+func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 	fmt.Printf("\n→ Running Work: [%s] %s\n", t.Type, t.Name)
 
@@ -35,7 +49,10 @@ func (t *Work) Run(ctx *Context) (err error) {
 		err = t.Request(ctx)
 
 	case TypeCron:
-		err = t.Cron(ctx)
+		if !(slices.Contains(skipTypes, string(t.Type))) {
+			err = t.Cron(ctx)
+			return nil
+		}
 
 	case TypeLog:
 		err = t.Log(ctx)
@@ -76,6 +93,13 @@ func (t *Work) Run(ctx *Context) (err error) {
 			e.Run(ctx)
 		}
 	}
+
+	return
+}
+
+func (t *Work) Task(ctx *Context) {
+
+	fmt.Println("123")
 
 	return
 }
