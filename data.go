@@ -14,18 +14,36 @@
 package work
 
 import (
+	"fmt"
+	"path"
+	"path/filepath"
 	"strings"
 )
 
-type Data map[string]interface{}
+// type Data map[string]interface{}
 
-var data = Data{}
+var data = map[string]interface{}{}
 
-func (w *Work) Data(Name string, Source ...string) *Work {
-	if len(Source) > 0 && strings.TrimSpace(Name) != "" {
-		if _, ok := data[Name]; ok {
-
-		}
+func (c *Config) Data(name string, source ...string) *Config {
+	if strings.TrimSpace(name) == "" || len(source) == 0 {
+		return c
 	}
-	return w
+
+	// Tạo đường dẫn từ source
+	dir := path.Join(source...)
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(".", dir)
+	}
+
+	// Kiểm tra map data và gán
+	if _, ok := data[name]; !ok {
+		files, err := scan(dir, ".work")
+
+		if err != nil {
+			fmt.Println("Error:", err)
+			return c
+		}
+		data[name] = files
+	}
+	return c
 }

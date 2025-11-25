@@ -52,7 +52,7 @@ func (s *Schedule) Definition() (gocron.JobDefinition, error) {
 
 	case "daily":
 		// Value có thể "HH:MM" hoặc "HH:MM:SS"
-		fmt.Println(s.Type)
+
 		atTime, err := parseAtTime(s.Value)
 
 		if err != nil {

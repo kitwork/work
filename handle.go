@@ -15,7 +15,6 @@ package work
 
 import (
 	"fmt"
-	"slices"
 	"time"
 )
 
@@ -49,10 +48,10 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		err = t.Request(ctx)
 
 	case TypeCron:
-		if !(slices.Contains(skipTypes, string(t.Type))) {
-			err = t.Cron(ctx)
-			return nil
-		}
+		// if !(slices.Contains(skipTypes, string(t.Type))) {
+		// 	err = t.Cron(ctx)
+		// 	return nil
+		// }
 
 	case TypeLog:
 		err = t.Log(ctx)

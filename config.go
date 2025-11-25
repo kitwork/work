@@ -28,6 +28,18 @@ type Config struct {
 	Accepts   []string // đuôi file chấp nhận
 
 	Embed bool
+
+	secret Handle
+	task   Handle
+	router Handle
+}
+
+type Handle struct {
+	Folder  string
+	Files   string
+	Accepts []string // đuôi file chấp nhận
+
+	Embed bool
 }
 
 func (c *Config) Run() error {

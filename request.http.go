@@ -50,14 +50,11 @@ func (r *Request) HTTP(ctx *Context) error {
 		return err
 	}
 
-	if r.As != "" {
-
-		return ctx.addPipe(r.As, func() any {
-			return result
-		})
-
-	}
 	ctx.Result = result
+	if r.As != "" {
+		return ctx.pipeValue(r.As, result)
+	}
+
 	return nil
 }
 
