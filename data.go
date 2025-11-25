@@ -15,8 +15,6 @@ package work
 
 import (
 	"fmt"
-	"path"
-	"path/filepath"
 	"strings"
 )
 
@@ -30,10 +28,7 @@ func (c *Config) Data(name string, source ...string) *Config {
 	}
 
 	// Tạo đường dẫn từ source
-	dir := path.Join(source...)
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(".", dir)
-	}
+	dir := directory(source...)
 
 	// Kiểm tra map data và gán
 	if _, ok := data[name]; !ok {
@@ -47,3 +42,27 @@ func (c *Config) Data(name string, source ...string) *Config {
 	}
 	return c
 }
+
+// func (c *Config) Data(name string, source ...string) *Config {
+// 	if strings.TrimSpace(name) == "" || len(source) == 0 {
+// 		return c
+// 	}
+
+// 	// Tạo đường dẫn từ source
+// 	dir := path.Join(source...)
+// 	if !filepath.IsAbs(dir) {
+// 		dir = filepath.Join(".", dir)
+// 	}
+
+// 	// Kiểm tra map data và gán
+// 	if _, ok := data[name]; !ok {
+// 		files, err := scan(dir, ".work")
+
+// 		if err != nil {
+// 			fmt.Println("Error:", err)
+// 			return c
+// 		}
+// 		data[name] = files
+// 	}
+// 	return c
+// }

@@ -52,7 +52,7 @@ func (r *Request) HTTP(ctx *Context) error {
 
 	ctx.Result = result
 	if r.As != "" {
-		return ctx.pipeValue(r.As, result)
+		return ctx.emit(r.As, result)
 	}
 
 	return nil

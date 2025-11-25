@@ -16,7 +16,9 @@ package work
 import (
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -69,4 +71,47 @@ func scan(dir string, accepts ...string) (map[string]interface{}, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func files(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			files = append(files, entry.Name())
+		}
+	}
+
+	return files, nil
+}
+
+func directory(source ...string) string {
+
+	// Tạo đường dẫn từ source
+	dir := path.Join(source...)
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(".", dir)
+	}
+	return dir
+}
+
+func readfile(path string) (map[string]interface{}, error) {
+	// 1. Đọc file YAML
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read file: %w", err)
+	}
+
+	// 2. Parse YAML vào map[string]interface{}
+	var workflow map[string]interface{}
+	err = yaml.Unmarshal(data, &workflow)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing YAML: %w", err)
+	}
+
+	return workflow, nil
 }

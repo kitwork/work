@@ -32,16 +32,9 @@ type Schedule struct {
 	EndAt   *time.Time `work:"end_at"`
 }
 
-type Schedulex struct {
-	Type  string `work:"type"`  // cron | daily | hourly | weekly | monthly | every
-	Value string `work:"value"` // tuỳ theo type
-	Every uint   `work:"internal"`
-	Ats   []string
-
-	Tag     string     `work:"tag"`
-	Limit   int        `work:"limit"`
-	StartAt *time.Time `work:"start_at"`
-	EndAt   *time.Time `work:"end_at"`
+func (cfg *Config) Schedule(source ...string) *Config {
+	cfg.schedule = cfg.source("tasks", source...)
+	return cfg
 }
 
 func (s *Schedule) Definition() (gocron.JobDefinition, error) {
@@ -102,6 +95,70 @@ func (s *Schedule) Definition() (gocron.JobDefinition, error) {
 
 	default:
 		return nil, fmt.Errorf("unknown schedule type: %s", s.Type)
+	}
+}
+
+func job(typing string, value string) (gocron.JobDefinition, error) {
+	// value, ok := val.(string)
+	// if !ok {
+	// 	return nil, fmt.Errorf("value schedule type: %s", typing)
+	// }
+	switch typing {
+	case "cron":
+		return gocron.CronJob(value, false), nil
+
+	case "daily":
+		// Value có thể "HH:MM" hoặc "HH:MM:SS"
+
+		atTime, err := parseAtTime(value)
+
+		if err != nil {
+			return nil, err
+		}
+		return gocron.DailyJob(1, gocron.NewAtTimes(atTime)), nil
+
+	case "weekly":
+		// Value có thể "Monday HH:MM" hoặc "Monday HH:MM:SS"
+		parts := strings.Split(strings.TrimSpace(value), " ")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid weekly format: %s", value)
+		}
+
+		dayStr, timeStr := parts[0], parts[1]
+
+		atTime, err := parseAtTime(timeStr)
+		if err != nil {
+			return nil, err
+		}
+		weekday, err := WeekdayFromString(dayStr)
+		if err != nil {
+			return nil, err
+		}
+		return gocron.WeeklyJob(1, gocron.NewWeekdays(weekday), gocron.NewAtTimes(atTime)), nil
+
+	case "monthly":
+		// Value có thể "5 10:00" hoặc "5 10:00,15 14:00"
+		parts := strings.Split(strings.TrimSpace(value), " ")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid monthly format: %s", value)
+		}
+		dayStr, timeStr := atoiOrZero(parts[0]), parts[1]
+
+		atTime, err := parseAtTime(timeStr)
+		if err != nil {
+			return nil, err
+		}
+		return gocron.MonthlyJob(1, gocron.NewDaysOfTheMonth(int(dayStr)), gocron.NewAtTimes(atTime)), nil
+
+	case "every":
+		d, err := time.ParseDuration(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid duration: %s", value)
+		}
+		return gocron.DurationJob(d), nil
+
+	default:
+		return nil, fmt.Errorf("unknown schedule type: %s", typing)
 	}
 }
 

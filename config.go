@@ -13,105 +13,174 @@
 
 package work
 
-import (
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-
-	"gopkg.in/yaml.v3"
-)
+import "fmt"
 
 type Config struct {
-	Directory string
-	Files     []string
-	Accepts   []string // đuôi file chấp nhận
+	secret   Source
+	schedule Source
+	router   Source
 
-	Embed bool
+	data []Source
 
-	secret Handle
-	task   Handle
-	router Handle
+	err error
 }
 
-type Handle struct {
-	Folder  string
-	Files   string
-	Accepts []string // đuôi file chấp nhận
-
-	Embed bool
+func New() *Config {
+	return &Config{}
 }
 
 func (c *Config) Run() error {
 
 	ctx := NewContext()
 
-	for _, file := range c.Files {
+	accepts := []string{".work"}
 
-		// chỉ xử lý Work
-		ext := filepath.Ext(file)
-		if ext != ".work" {
+	// 1. Secret
+	secretData, err := c.secret.Scanner(accepts...)
+	if err != nil {
+		return err
+	}
+	ctx.emit("secret", secretData)
+
+	// 2. Schedule
+	scheduleData, err := c.schedule.Scanner(accepts...)
+	if err != nil {
+		return err
+	}
+
+	for name, content := range scheduleData {
+		data, ok := content.(map[string]interface{})
+		if !ok {
+			fmt.Printf("⚠️  Warning: invalid schedule format: %s\n", name)
 			continue
 		}
-		// if ext != ".yaml" && ext != ".yml" {
-		// 	continue
-		// }
 
-		// 1. đọc file yaml
-		workflow, err := readfile(file)
-		if err != nil {
-			return fmt.Errorf("error reading %s: %w", file, err)
+		// fmt.Println(data)
+		sched, exists := data["schedules"]
+		if !exists {
+			fmt.Printf("⚠️  Warning: missing key 'startTime' in schedule: %s\n", name)
+			continue
 		}
 
-		// 2. parse workflow
-		root := Parsing(workflow)
-		if root == nil {
-			return fmt.Errorf("cannot parse workflow: %s", file)
-		}
+		switch v := sched.(type) {
+		case string:
+			job("every", v)
 
-		// 3. run workflow
-		fmt.Println(">> Running workflow:", file)
+		case map[string]interface{}:
 
-		if err := root.Run(ctx); err != nil {
-			return err
+			for key, val := range v {
+				switch key {
+				case "daily", "weekly", "monthly", "every":
+					// Chỉ lấy string, bạn có thể thay đổi type assertion theo nhu cầu
+					if strVal, ok := val.(string); ok {
+						job("every", strVal)
+					} else {
+						fmt.Printf("%s -> %s: value is not string, type: %T\n", name, key, val)
+					}
+				}
+
+			}
+
+		case []interface{}:
+			for i, item := range v {
+				switch s := item.(type) {
+				case string:
+					job("every", s)
+				case map[string]interface{}:
+					for key, val := range s {
+						switch key {
+						case "daily", "weekly", "monthly", "every":
+							if strVal, ok := val.(string); ok {
+								job("every", strVal)
+							} else {
+								fmt.Printf("%s -> item %d -> %s: value is not string, type: %T\n", name, i, key, val)
+							}
+						}
+					}
+				default:
+					fmt.Printf("%s -> item %d: unknown type %T\n", name, i, item)
+				}
+			}
+		default:
+			fmt.Println("unknown type")
 		}
+		fmt.Println(sched)
 
 	}
+
+	// 3. Router
+	// router, err := c.router.Scanner(accepts...)
+	// if err != nil {
+	// 	return err
+	// }
+	// for name, data := range router {
+	// 	raw, ok := data.(map[string]interface{})
+	// 	if !ok {
+	// 		fmt.Printf("⚠️  Warning: invalid router format: %s\n", name)
+	// 		continue
+	// 	}
+	// 	work := Parsing(raw)
+	// 	if err := work.Run(ctx); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }
 
-func readfile(path string) (map[string]interface{}, error) {
-	// 1. Đọc file YAML
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read file: %w", err)
-	}
+// func (c *Config) Run() error {
 
-	// 2. Parse YAML vào map[string]interface{}
-	var workflow map[string]interface{}
-	err = yaml.Unmarshal(data, &workflow)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing YAML: %w", err)
-	}
+// 	ctx := NewContext()
 
-	return workflow, nil
-}
+// 	for _, file := range c.Files {
 
-func Source(folder string) *Config {
-	cfg := Config{}
+// 		// chỉ xử lý Work
+// 		ext := filepath.Ext(file)
+// 		if ext != ".work" {
+// 			continue
+// 		}
+// 		// if ext != ".yaml" && ext != ".yml" {
+// 		// 	continue
+// 		// }
 
-	filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
+// 		// 1. đọc file yaml
+// 		workflow, err := readfile(file)
+// 		if err != nil {
+// 			return fmt.Errorf("error reading %s: %w", file, err)
+// 		}
 
-		if !d.IsDir() {
-			cfg.Files = append(cfg.Files, path)
-		}
+// 		// 2. parse workflow
+// 		root := Parsing(workflow)
+// 		if root == nil {
+// 			return fmt.Errorf("cannot parse workflow: %s", file)
+// 		}
 
-		return nil
-	})
+// 		// 3. run workflow
+// 		fmt.Println(">> Running workflow:", file)
 
-	return &cfg
-}
+// 		if err := root.Run(ctx); err != nil {
+// 			return err
+// 		}
+
+// 	}
+
+// 	return nil
+// }
+
+// func Source(folder string) *Config {
+// 	cfg := Config{}
+
+// 	filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
+// 		if err != nil {
+// 			return nil
+// 		}
+
+// 		if !d.IsDir() {
+// 			cfg.Files = append(cfg.Files, path)
+// 		}
+
+// 		return nil
+// 	})
+
+// 	return &cfg
+// }

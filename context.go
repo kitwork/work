@@ -31,7 +31,7 @@ type Context struct {
 	Version string
 
 	templ *template.Template
-	pipe  *template.FuncMap
+	pipes *template.FuncMap
 }
 
 func NewContext() *Context {
@@ -43,7 +43,7 @@ func NewContext() *Context {
 }
 
 // addPipe thêm một func mới vào pipes
-func (c *Context) pipeAdd(name string, function interface{}) error {
+func (c *Context) pipe(name string, function interface{}) error {
 	if name == "" {
 		return fmt.Errorf("pipe name cannot be empty")
 	}
@@ -57,41 +57,47 @@ func (c *Context) pipeAdd(name string, function interface{}) error {
 	c.pipeline()
 
 	// check key đã tồn tại chưa
-	if _, exists := (*c.pipe)[name]; exists {
+	if _, exists := (*c.pipes)[name]; exists {
 		return fmt.Errorf("pipe '%s' already exists", name)
 	}
 
 	// thêm vào pipes
-	(*c.pipe)[name] = function
+	(*c.pipes)[name] = function
 	return nil
 }
 
-func (c *Context) pipeValue(name string, val interface{}) error {
-	return c.pipeAdd(name, func() reflect.Value {
+func (c *Context) emit(name string, val interface{}) error {
+	return c.pipe(name, func() reflect.Value {
+		return reflect.ValueOf(val)
+	})
+}
+
+func (c *Context) merge(name string, val interface{}) error {
+	return c.pipe(name, func() reflect.Value {
 		return reflect.ValueOf(val)
 	})
 }
 
 func (c *Context) pipeline() (result template.FuncMap) {
-	if c.pipe == nil {
+	if c.pipes == nil {
 		m := pipe.Functions()
-		c.pipe = &m
+		c.pipes = &m
 	}
-	return *c.pipe
+	return *c.pipes
 }
 
 func (c *Context) pipeData() (result template.FuncMap) {
 	c.pipeline()
 	for key, val := range data {
 
-		if _, exists := (*c.pipe)[key]; !exists {
-			(*c.pipe)[key] = func() reflect.Value {
+		if _, exists := (*c.pipes)[key]; !exists {
+			(*c.pipes)[key] = func() reflect.Value {
 				return reflect.ValueOf(val)
 			}
 		}
 
 	}
-	return *c.pipe
+	return *c.pipes
 }
 
 func (c *Context) render(val string) (string, error) {

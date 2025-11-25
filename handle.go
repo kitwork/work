@@ -48,10 +48,7 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		err = t.Request(ctx)
 
 	case TypeCron:
-		// if !(slices.Contains(skipTypes, string(t.Type))) {
-		// 	err = t.Cron(ctx)
-		// 	return nil
-		// }
+		return nil
 
 	case TypeLog:
 		err = t.Log(ctx)
@@ -92,13 +89,6 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 			e.Run(ctx)
 		}
 	}
-
-	return
-}
-
-func (t *Work) Task(ctx *Context) {
-
-	fmt.Println("123")
 
 	return
 }
