@@ -13,7 +13,9 @@
 
 package work
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Config struct {
 	secret   Source
@@ -49,62 +51,30 @@ func (c *Config) Run() error {
 	}
 
 	for name, content := range scheduleData {
-		data, ok := content.(map[string]interface{})
+
+		contenter, ok := content.(map[string]interface{})
 		if !ok {
 			fmt.Printf("⚠️  Warning: invalid schedule format: %s\n", name)
 			continue
 		}
 
-		// fmt.Println(data)
-		sched, exists := data["schedules"]
-		if !exists {
-			fmt.Printf("⚠️  Warning: missing key 'startTime' in schedule: %s\n", name)
-			continue
-		}
+		for key, val := range contenter {
 
-		switch v := sched.(type) {
-		case string:
-			job("every", v)
+			switch key {
+			case "schedules", "schedule", "cron", "daily", "weekly", "monthly", "every":
 
-		case map[string]interface{}:
-
-			for key, val := range v {
-				switch key {
-				case "daily", "weekly", "monthly", "every":
-					// Chỉ lấy string, bạn có thể thay đổi type assertion theo nhu cầu
-					if strVal, ok := val.(string); ok {
-						job("every", strVal)
-					} else {
-						fmt.Printf("%s -> %s: value is not string, type: %T\n", name, key, val)
-					}
+				scheduler, err := NewScheduler(key, val, contenter, ctx)
+				if err != nil {
+					return fmt.Errorf("failed to create scheduler: %w", err)
+				}
+				if scheduler != nil {
+					scheduler.Start() // chạy async
+					// defer func() { _ = scheduler.Shutdown() }()
 				}
 
 			}
 
-		case []interface{}:
-			for i, item := range v {
-				switch s := item.(type) {
-				case string:
-					job("every", s)
-				case map[string]interface{}:
-					for key, val := range s {
-						switch key {
-						case "daily", "weekly", "monthly", "every":
-							if strVal, ok := val.(string); ok {
-								job("every", strVal)
-							} else {
-								fmt.Printf("%s -> item %d -> %s: value is not string, type: %T\n", name, i, key, val)
-							}
-						}
-					}
-				default:
-					fmt.Printf("%s -> item %d: unknown type %T\n", name, i, item)
-				}
-			}
-		default:
-			fmt.Println("unknown type")
 		}
-		fmt.Println(sched)
 
 	}
 

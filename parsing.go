@@ -18,8 +18,49 @@ import (
 	"time"
 )
 
+func NewWorker(typing Type, data map[string]interface{}) *Work {
+	work := &Work{
+		Config:  make(map[string]interface{}),
+		Works:   []*Work{},
+		Success: []*Work{},
+		Error:   []*Work{},
+		Kind:    KindUnknown,
+		Type:    typing,
+	}
+
+	for key, val := range data {
+		switch key {
+		case "name":
+			if s, ok := val.(string); ok {
+				work.Name = s
+			}
+
+		case "works", "work":
+			work.Works = NewWorks(val)
+		case "success":
+			work.Success = NewWorks(val)
+		case "error":
+			work.Error = NewWorks(val)
+		case "timeout":
+			if tStr, ok := val.(string); ok {
+				d, err := time.ParseDuration(tStr)
+				if err == nil {
+					work.Timeout = d
+				} else {
+					fmt.Printf("⚠️  Warning: cannot parse timeout %v: %v\n", val, err)
+				}
+			}
+		default:
+			work.Config[key] = val
+		}
+
+	}
+
+	return work
+}
+
 // Parse converts YAML-decoded map into an Work struct (recursive).
-func Parsing(data map[string]interface{}) *Work {
+func NewWork(data map[string]interface{}) *Work {
 	work := &Work{
 		Config:  make(map[string]interface{}),
 		Works:   []*Work{},
@@ -50,11 +91,11 @@ func Parsing(data map[string]interface{}) *Work {
 					}
 
 				case "works", "work":
-					work.Works = parseList(vv)
+					work.Works = NewWorks(vv)
 				case "success":
-					work.Success = parseList(vv)
+					work.Success = NewWorks(vv)
 				case "error":
-					work.Error = parseList(vv)
+					work.Error = NewWorks(vv)
 				case "timeout":
 					if tStr, ok := vv.(string); ok {
 						d, err := time.ParseDuration(tStr)
@@ -78,7 +119,7 @@ func Parsing(data map[string]interface{}) *Work {
 		case []interface{}:
 			work.Type = TypeParseSafe(key)
 			work.Kind = KindList
-			work.Works = parseList(v)
+			work.Works = NewWorks(v)
 
 		// ================================
 		// 3) VALUE FORM
@@ -102,11 +143,11 @@ func Parsing(data map[string]interface{}) *Work {
 	return work
 }
 
-// parseList parses:
+// NewWorks parses:
 // - short string: "log"
 // - full form: { fetch: {...} }
 // - unknown primitives
-func parseList(v interface{}) []*Work {
+func NewWorks(v interface{}) []*Work {
 	result := []*Work{}
 
 	list, ok := v.([]interface{})
@@ -134,7 +175,7 @@ func parseList(v interface{}) []*Work {
 		// - log: { msg: "hi" }
 		// -----------------------
 		case map[string]interface{}:
-			result = append(result, Parsing(x))
+			result = append(result, NewWork(x))
 
 		// -----------------------
 		// Unknown value in list

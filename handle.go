@@ -48,7 +48,7 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		err = t.Request(ctx)
 
 	case TypeCron:
-		return nil
+		// return nil
 
 	case TypeLog:
 		err = t.Log(ctx)
@@ -74,19 +74,18 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		}
 	}
 
-	// 4. Nếu thành công → chạy Success branch
-	if err == nil && len(t.Success) > 0 {
-		fmt.Println("→ Success → chạy success branch")
-		for _, s := range t.Success {
-			s.Run(ctx)
-		}
-	}
-
 	// 3. Nếu lỗi → chạy Error branch
 	if err != nil && len(t.Error) > 0 {
 		fmt.Println("→ Error xảy ra → chạy error branch")
 		for _, e := range t.Error {
 			e.Run(ctx)
+		}
+	}
+	// 4. Nếu thành công → chạy Success branch
+	if err == nil && len(t.Success) > 0 {
+		fmt.Println("→ Success → chạy success branch")
+		for _, s := range t.Success {
+			s.Run(ctx)
 		}
 	}
 
