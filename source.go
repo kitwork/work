@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -189,4 +190,14 @@ func readYAML(path string) (interface{}, error) {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
 	return parsed, nil
+}
+
+func directory(source ...string) string {
+
+	// Tạo đường dẫn từ source
+	dir := path.Join(source...)
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(".", dir)
+	}
+	return dir
 }

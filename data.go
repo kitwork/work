@@ -13,35 +13,34 @@
 
 package work
 
-import (
-	"fmt"
-	"strings"
-)
-
 // type Data map[string]interface{}
 
-var data = map[string]interface{}{}
+// var data = map[string]interface{}{}
 
-func (c *Config) Data(name string, source ...string) *Config {
-	if strings.TrimSpace(name) == "" || len(source) == 0 {
-		return c
-	}
+// func NewData() map[string]interface{} {
+// 	return data
+// }
 
-	// Tạo đường dẫn từ source
-	dir := directory(source...)
+// func (c *Config) Data(name string, source ...string) *Config {
+// 	if strings.TrimSpace(name) == "" || len(source) == 0 {
+// 		return c
+// 	}
 
-	// Kiểm tra map data và gán
-	if _, ok := data[name]; !ok {
-		files, err := scan(dir, ".work")
+// 	// Tạo đường dẫn từ source
+// 	dir := directory(source...)
 
-		if err != nil {
-			fmt.Println("Error:", err)
-			return c
-		}
-		data[name] = files
-	}
-	return c
-}
+// 	// Kiểm tra map data và gán
+// 	if _, ok := data[name]; !ok {
+// 		files, err := scan(dir, ".work")
+
+// 		if err != nil {
+// 			fmt.Println("Error:", err)
+// 			return c
+// 		}
+// 		data[name] = files
+// 	}
+// 	return c
+// }
 
 // func (c *Config) Data(name string, source ...string) *Config {
 // 	if strings.TrimSpace(name) == "" || len(source) == 0 {

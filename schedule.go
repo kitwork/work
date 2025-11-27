@@ -64,21 +64,7 @@ type Daily struct {
 }
 
 func (d *Daily) AtTimes() gocron.AtTimes {
-	if len(d.Ats) == 0 {
-		return nil
-	}
-
-	first := d.Ats[0].Time()
-	if len(d.Ats) == 1 {
-		return gocron.NewAtTimes(first)
-	}
-
-	more := make([]gocron.AtTime, len(d.Ats)-1)
-	for i, at := range d.Ats[1:] {
-		more[i] = at.Time()
-	}
-
-	return gocron.NewAtTimes(first, more...)
+	return AtTimes(d.Ats)
 }
 
 func (d *Daily) Job() gocron.JobDefinition {
@@ -92,6 +78,25 @@ type Weekly struct {
 	Interval uint           `json:"interval"` // số tuần
 	Weekdays []time.Weekday `json:"weekdays"` // nhiều thứ trong tuần
 	Ats      []At           `json:"at_times,omitempty"`
+}
+
+func (w *Weekly) AtTimes() gocron.AtTimes {
+	return AtTimes(w.Ats)
+}
+
+func (w *Weekly) DaysOfTheWeek() gocron.Weekdays {
+	if len(w.Weekdays) == 0 {
+		return nil
+	}
+	// gocron.NewWeekdays yêu cầu ít nhất 1 argument
+	return gocron.NewWeekdays(w.Weekdays[0], w.Weekdays[1:]...)
+}
+
+func (d *Weekly) Job() gocron.JobDefinition {
+	if d.Interval == 0 {
+		d.Interval = 1
+	}
+	return gocron.WeeklyJob(d.Interval, d.DaysOfTheWeek(), d.AtTimes())
 }
 
 type Monthly struct {
@@ -132,83 +137,92 @@ func (at *At) Time() gocron.AtTime {
 	return gocron.NewAtTime(at.Hour, at.Minutes, at.Seconds)
 }
 
-func NewScheduler(key string, value interface{}, datax map[string]interface{}, ctx *Context) (s gocron.Scheduler, err error) {
+func AtTimes(ats []At) gocron.AtTimes {
+
+	if len(ats) == 0 {
+		return nil
+	}
+
+	first := ats[0].Time()
+	if len(ats) == 1 {
+		return gocron.NewAtTimes(first)
+	}
+
+	more := make([]gocron.AtTime, len(ats)-1)
+	for i, at := range ats[1:] {
+		more[i] = at.Time()
+	}
+
+	return gocron.NewAtTimes(first, more...)
+}
+
+func NewScheduler(scheduler map[string]interface{}) (jobs []gocron.JobDefinition, err error) {
+
 	schedule := &Schedule{}
 
-	switch key {
-	case "schedules", "schedule":
-		switch v := value.(type) {
-		case string:
-			// tự động nhận biết string: "5s", "15:00", "Monday 10:30", v.v
-			if err := schedule.smart("", v); err != nil {
+	for key, value := range scheduler {
+		switch key {
+		case "schedules", "schedule":
+			switch v := value.(type) {
+			case string:
+				// tự động nhận biết string: "5s", "15:00", "Monday 10:30", v.v
+				if err := schedule.smart("", v); err != nil {
+					return nil, err
+				}
+
+			case map[string]interface{}:
+				// mỗi key con: daily, weekly, monthly, every, cron
+				for k, val := range v {
+					if err := schedule.parseing(k, val); err != nil {
+						return nil, fmt.Errorf("key %s: %w", k, err)
+					}
+				}
+
+			case []interface{}:
+				for i, item := range v {
+					switch x := item.(type) {
+					case string:
+						if err := schedule.smart("", x); err != nil {
+							return nil, fmt.Errorf("item %d: %w", i, err)
+						}
+					case map[string]interface{}:
+						for k, val := range x {
+							if err := schedule.parseing(k, val); err != nil {
+								return nil, fmt.Errorf("item %d key %s: %w", i, k, err)
+							}
+						}
+					default:
+						return nil, fmt.Errorf("item %d unsupported type %T", i, x)
+					}
+				}
+
+			default:
+				return nil, fmt.Errorf("unsupported type %T for schedules", value)
+			}
+
+		case "daily", "weekly", "monthly", "every":
+			// trực tiếp daily / weekly / monthly / every
+			if err := schedule.parseing(key, value); err != nil {
 				return nil, err
 			}
-
-		case map[string]interface{}:
-			// mỗi key con: daily, weekly, monthly, every, cron
-			for k, val := range v {
-				if err := schedule.parseing(k, val); err != nil {
-					return nil, fmt.Errorf("key %s: %w", k, err)
-				}
-			}
-
-		case []interface{}:
-			for i, item := range v {
-				switch x := item.(type) {
-				case string:
-					if err := schedule.smart("", x); err != nil {
-						return nil, fmt.Errorf("item %d: %w", i, err)
-					}
-				case map[string]interface{}:
-					for k, val := range x {
-						if err := schedule.parseing(k, val); err != nil {
-							return nil, fmt.Errorf("item %d key %s: %w", i, k, err)
-						}
-					}
-				default:
-					return nil, fmt.Errorf("item %d unsupported type %T", i, x)
-				}
-			}
-
 		default:
-			return nil, fmt.Errorf("unsupported type %T for schedules", value)
+
 		}
 
-	default:
-		// trực tiếp daily / weekly / monthly / every
-		if err := schedule.parseing(key, value); err != nil {
-			return nil, err
-		}
 	}
-
 	// schedule.Logging()
 
-	// tạo gocron Scheduler
-	s, err = gocron.NewScheduler(gocron.WithLocation(time.Local))
-	if err != nil {
-		return nil, err
-	}
 	// --- Áp dụng schedule vào gocron ---
 	// Daily
 	if schedule.Daily != nil {
-		// daily := schedule.Daily
-		// if _, err = s.NewJob(daily.Job(), gocron.NewTask(task, parameters...)); err != nil {
-		// 	return nil, err
-		// }
+		jobs = append(jobs, schedule.Daily.Job())
+
 	}
 
 	// Weekly
-	// if schedule.Weekly != nil {
-	// 	for i, day := range schedule.Weekly.Weekdays {
-	// 		for _, at := range schedule.Weekly.Ats {
-	// 			job := s.Every(schedule.Weekly.Interval).Weekday(day)
-	// 			job.At(at.ToString())
-	// 			if i == 0 {
-	// 				// start scheduler
-	// 			}
-	// 		}
-	// 	}
-	// }
+	if schedule.Weekly != nil {
+		jobs = append(jobs, schedule.Weekly.Job())
+	}
 
 	// // Monthly
 	// if schedule.Monthly != nil {
@@ -226,16 +240,16 @@ func NewScheduler(key string, value interface{}, datax map[string]interface{}, c
 	// // Duration / Every
 	if schedule.Duration != nil {
 
-		every := schedule.Duration
-		def := every.Job()
+		jobs = append(jobs, schedule.Duration.Job())
+		// every :=
 
-		work := NewWorker(TypeCron, datax)
-		tasker := gocron.NewTask(work.Run, ctx, "cron")
-		// logJSON(work)
-		if _, err = s.NewJob(def, tasker); err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
+		// work := NewWorker(TypeCron, scheduler)
+		// tasker := gocron.NewTask(work.Run, ctx, "cron")
+		// // logJSON(work)
+		// if _, err = s.NewJob(def, tasker); err != nil {
+		// 	fmt.Println(err)
+		// 	return nil, err
+		// }
 	}
 
 	// Cron (string)
@@ -244,7 +258,7 @@ func NewScheduler(key string, value interface{}, datax map[string]interface{}, c
 	// 	_ = job
 	// }
 
-	return s, nil
+	return
 }
 
 func logJSON(input interface{}) {

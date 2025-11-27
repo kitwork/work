@@ -50,9 +50,9 @@ func (r *Request) HTTP(ctx *Context) error {
 		return err
 	}
 
-	ctx.Result = result
+	// ctx.Result = result
 	if r.As != "" {
-		return ctx.emit(r.As, result)
+		return ctx.pipes.As(r.As, result)
 	}
 
 	return nil

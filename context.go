@@ -15,11 +15,7 @@ package work
 
 import (
 	"bytes"
-	"fmt"
-	"reflect"
 	"text/template"
-
-	"github.com/kitwork/pipe"
 )
 
 type Context struct {
@@ -31,73 +27,18 @@ type Context struct {
 	Version string
 
 	templ *template.Template
-	pipes *template.FuncMap
+	pipes *Pipeline
 }
 
-func NewContext() *Context {
-
-	ctx := Context{}
-	ctx.pipeData()
-
-	return &ctx
+func NewContext(pipes *Pipeline) *Context {
+	return &Context{pipes: pipes}
 }
 
-// addPipe thêm một func mới vào pipes
-func (c *Context) pipe(name string, function interface{}) error {
-	if name == "" {
-		return fmt.Errorf("pipe name cannot be empty")
+func (c *Context) template() *template.Template {
+	if c.templ == nil {
+		c.templ = template.New("work")
 	}
-
-	// check function có phải là func
-	if function == nil || reflect.TypeOf(function).Kind() != reflect.Func {
-		return fmt.Errorf("value for pipe '%s' is not a function", name)
-	}
-
-	// khởi tạo pipes nếu nil
-	c.pipeline()
-
-	// check key đã tồn tại chưa
-	if _, exists := (*c.pipes)[name]; exists {
-		return fmt.Errorf("pipe '%s' already exists", name)
-	}
-
-	// thêm vào pipes
-	(*c.pipes)[name] = function
-	return nil
-}
-
-func (c *Context) emit(name string, val interface{}) error {
-	return c.pipe(name, func() reflect.Value {
-		return reflect.ValueOf(val)
-	})
-}
-
-func (c *Context) merge(name string, val interface{}) error {
-	return c.pipe(name, func() reflect.Value {
-		return reflect.ValueOf(val)
-	})
-}
-
-func (c *Context) pipeline() (result template.FuncMap) {
-	if c.pipes == nil {
-		m := pipe.Functions()
-		c.pipes = &m
-	}
-	return *c.pipes
-}
-
-func (c *Context) pipeData() (result template.FuncMap) {
-	c.pipeline()
-	for key, val := range data {
-
-		if _, exists := (*c.pipes)[key]; !exists {
-			(*c.pipes)[key] = func() reflect.Value {
-				return reflect.ValueOf(val)
-			}
-		}
-
-	}
-	return *c.pipes
+	return c.templ.Funcs(c.pipes.Functions())
 }
 
 func (c *Context) render(val string) (string, error) {
@@ -105,9 +46,7 @@ func (c *Context) render(val string) (string, error) {
 		return "", nil
 	}
 
-	funcs := c.pipeline()
-
-	tmpl, err := template.New("work").Funcs(funcs).Parse(val)
+	tmpl, err := c.template().Parse(val)
 	if err != nil {
 		return "", err
 	}

@@ -66,7 +66,7 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 	// 2. Nếu work chính OK → chạy chuỗi Works
 	if err == nil && len(t.Works) > 0 {
-		fmt.Println("→ run works chain...")
+		// fmt.Println("→ run works chain...")
 		for _, a := range t.Works {
 			if err = a.Run(ctx); err != nil {
 				break
@@ -76,14 +76,14 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 	// 3. Nếu lỗi → chạy Error branch
 	if err != nil && len(t.Error) > 0 {
-		fmt.Println("→ Error xảy ra → chạy error branch")
+		fmt.Printf("→ Error in [%s]: %v. Running error branch...\n", t.Name, err)
 		for _, e := range t.Error {
 			e.Run(ctx)
 		}
 	}
 	// 4. Nếu thành công → chạy Success branch
 	if err == nil && len(t.Success) > 0 {
-		fmt.Println("→ Success → chạy success branch")
+		// fmt.Println("→ Success → chạy success branch")
 		for _, s := range t.Success {
 			s.Run(ctx)
 		}

@@ -15,6 +15,12 @@ package work
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-co-op/gocron/v2"
 )
 
 type Config struct {
@@ -33,49 +39,70 @@ func New() *Config {
 
 func (c *Config) Run() error {
 
-	ctx := NewContext()
-
+	pipeline := NewPipe()
 	accepts := []string{".work"}
 
 	// 1. Secret
-	secretData, err := c.secret.Scanner(accepts...)
+	secret, err := c.secret.Scanner(accepts...)
 	if err != nil {
 		return err
 	}
-	ctx.emit("secret", secretData)
+	pipeline.As("secret", secret)
 
 	// 2. Schedule
-	scheduleData, err := c.schedule.Scanner(accepts...)
+	schedules, err := c.schedule.Scanner(accepts...)
 	if err != nil {
 		return err
 	}
 
-	for name, content := range scheduleData {
+	// Create a single scheduler for the application
+	s, err := gocron.NewScheduler(gocron.WithLocation(time.Local))
+	if err != nil {
+		return err
+	}
 
-		contenter, ok := content.(map[string]interface{})
+	for name, content := range schedules {
+
+		scheduler, ok := content.(map[string]interface{})
 		if !ok {
 			fmt.Printf("⚠️  Warning: invalid schedule format: %s\n", name)
 			continue
 		}
 
-		for key, val := range contenter {
+		scheded := false
 
+		for key := range scheduler {
 			switch key {
 			case "schedules", "schedule", "cron", "daily", "weekly", "monthly", "every":
-
-				scheduler, err := NewScheduler(key, val, contenter, ctx)
-				if err != nil {
-					return fmt.Errorf("failed to create scheduler: %w", err)
-				}
-				if scheduler != nil {
-					scheduler.Start() // chạy async
-					// defer func() { _ = scheduler.Shutdown() }()
-				}
-
+				scheded = true
 			}
-
+			if scheded {
+				break
+			}
 		}
 
+		if scheded {
+			jobs, err := NewScheduler(scheduler)
+			if err != nil {
+				return fmt.Errorf("failed to create scheduler for %s: %w", name, err)
+			}
+
+			if len(jobs) > 0 {
+				task := gocron.NewTask(func() {
+					work := NewWorker(TypeCron, scheduler)
+					ctx := NewContext(pipeline.Clone())
+					if err := work.Run(ctx, "cron"); err != nil {
+						fmt.Printf("Job error in %s: %v\n", name, err)
+					}
+				})
+
+				for _, job := range jobs {
+					if _, err = s.NewJob(job, task); err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
 
 	// 3. Router
@@ -83,74 +110,16 @@ func (c *Config) Run() error {
 	// if err != nil {
 	// 	return err
 	// }
-	// for name, data := range router {
-	// 	raw, ok := data.(map[string]interface{})
-	// 	if !ok {
-	// 		fmt.Printf("⚠️  Warning: invalid router format: %s\n", name)
-	// 		continue
-	// 	}
-	// 	work := Parsing(raw)
-	// 	if err := work.Run(ctx); err != nil {
-	// 		return err
-	// 	}
-	// }
 
-	return nil
+	// Start the scheduler
+	s.Start()
+	fmt.Println("Scheduler started. Press Ctrl+C to stop.")
+
+	// Graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+
+	fmt.Println("\nShutting down...")
+	return s.Shutdown()
 }
-
-// func (c *Config) Run() error {
-
-// 	ctx := NewContext()
-
-// 	for _, file := range c.Files {
-
-// 		// chỉ xử lý Work
-// 		ext := filepath.Ext(file)
-// 		if ext != ".work" {
-// 			continue
-// 		}
-// 		// if ext != ".yaml" && ext != ".yml" {
-// 		// 	continue
-// 		// }
-
-// 		// 1. đọc file yaml
-// 		workflow, err := readfile(file)
-// 		if err != nil {
-// 			return fmt.Errorf("error reading %s: %w", file, err)
-// 		}
-
-// 		// 2. parse workflow
-// 		root := Parsing(workflow)
-// 		if root == nil {
-// 			return fmt.Errorf("cannot parse workflow: %s", file)
-// 		}
-
-// 		// 3. run workflow
-// 		fmt.Println(">> Running workflow:", file)
-
-// 		if err := root.Run(ctx); err != nil {
-// 			return err
-// 		}
-
-// 	}
-
-// 	return nil
-// }
-
-// func Source(folder string) *Config {
-// 	cfg := Config{}
-
-// 	filepath.WalkDir(folder, func(path string, d os.DirEntry, err error) error {
-// 		if err != nil {
-// 			return nil
-// 		}
-
-// 		if !d.IsDir() {
-// 			cfg.Files = append(cfg.Files, path)
-// 		}
-
-// 		return nil
-// 	})
-
-// 	return &cfg
-// }

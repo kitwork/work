@@ -1,0 +1,75 @@
+// KitWork - Work Engine Core
+// Copyright (C) 2025 Huỳnh Nhân Quốc
+
+// This program is free software: you can redistribute it and/or modify it
+// under the terms of the GNU Affero General Public License version 3 (AGPL-3.0).
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+// You should have received a copy of the AGPL-3.0 License along with this program.
+// If not, see <https://www.gnu.org/licenses/agpl-3.0.html>
+
+package work
+
+import (
+	"fmt"
+	"html/template"
+	"reflect"
+
+	"github.com/kitwork/pipe"
+)
+
+type Pipeline struct {
+	funcs template.FuncMap
+}
+
+func NewPipe() *Pipeline {
+	return &Pipeline{funcs: pipe.New()}
+}
+
+// Add a new function to the pipeline
+func (p *Pipeline) Add(key string, function interface{}) error {
+	if key == "" {
+		return fmt.Errorf("pipe name cannot be empty")
+	}
+	if function == nil || reflect.TypeOf(function).Kind() != reflect.Func {
+		return fmt.Errorf("value for pipe '%s' is not a function", key)
+	}
+	if _, exists := p.funcs[key]; exists {
+		return fmt.Errorf("pipe '%s' already exists", key)
+	}
+	p.funcs[key] = function
+	return nil
+}
+
+// Emit a value as a function
+func (p *Pipeline) As(key string, val interface{}) error {
+	return p.Add(key, func() reflect.Value {
+		return reflect.ValueOf(val)
+	})
+}
+
+// Merge multiple key-value pairs into the pipeline
+func (p *Pipeline) Merge(data map[string]interface{}) error {
+	for k, v := range data {
+		if err := p.As(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Return the underlying FuncMap
+func (p *Pipeline) Functions() template.FuncMap {
+	return p.funcs
+}
+
+func (p *Pipeline) Clone() *Pipeline {
+	clone := make(template.FuncMap, len(p.funcs))
+	for k, v := range p.funcs {
+		clone[k] = v
+	}
+	return &Pipeline{funcs: clone}
+}
