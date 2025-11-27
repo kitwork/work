@@ -31,10 +31,14 @@ import "github.com/kitwork/work"
 
 func main() {
     // Run tasks from source folder
-    err := work.Source("./source/tasks").Run()
-    if err != nil {
-        panic(err)
-    }
+    err := work.New().
+		Secret().
+		Schedule().
+		Router().
+		Run()
+	if err != nil {
+		panic(err)
+	}
 }
 ```
 
