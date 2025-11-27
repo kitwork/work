@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron/v2"
+	"github.com/gofiber/fiber/v2"
 )
 
 type Config struct {
@@ -106,20 +107,41 @@ func (c *Config) Run() error {
 	}
 
 	// 3. Router
-	// router, err := c.router.Scanner(accepts...)
-	// if err != nil {
-	// 	return err
-	// }
+	// Router
+	router, err := c.router.Scanner(accepts...)
+	if err != nil {
+		return err
+	}
 
-	// Start the scheduler
+	// Start scheduler
 	s.Start()
-	fmt.Println("Scheduler started. Press Ctrl+C to stop.")
+	defer func() { _ = s.Shutdown() }()
 
-	// Graceful shutdown
+	// If router exists, start Fiber alongside scheduler
+	if len(router) > 0 {
+
+		fmt.Println(router)
+		app := fiber.New(fiber.Config{
+			DisableStartupMessage: true,
+		})
+
+		app.Get("/", func(c *fiber.Ctx) error {
+			return c.SendString("Kitwork 🌱")
+		})
+
+		go func() {
+			if err := app.Listen(":3000"); err != nil {
+				fmt.Println("Fiber stopped:", err)
+			}
+		}()
+	}
+
+	fmt.Println("KitWork started. Press Ctrl+C to stop.")
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	fmt.Println("\nShutting down...")
-	return s.Shutdown()
+	fmt.Println("Shutting down...")
+	return nil
 }

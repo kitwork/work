@@ -112,6 +112,46 @@ func (src *Source) Scan(accepts ...string) (map[string]interface{}, error) {
 }
 
 // Scanner — scan toàn bộ thư mục (recursive)
+// func (src *Source) Scanner(accepts ...string) (map[string]interface{}, error) {
+// 	if len(accepts) == 0 {
+// 		return map[string]interface{}{}, errors.New("error not using accepts...")
+// 	}
+// 	result := make(map[string]interface{})
+// 	exts := normalizeExts(accepts)
+
+// 	err := filepath.WalkDir(src.Dir, func(path string, entry fs.DirEntry, err error) error {
+// 		if err != nil {
+// 			return err
+// 		}
+// 		if entry.IsDir() {
+// 			return nil
+// 		}
+
+// 		name := entry.Name()
+
+// 		matched := matchExt(name, exts)
+// 		if matched == "" {
+// 			return nil
+// 		}
+
+// 		parsed, err := readYAML(path)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		key := strings.TrimSuffix(name, matched)
+// 		result[key] = parsed
+
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return result, nil
+// }
+
 func (src *Source) Scanner(accepts ...string) (map[string]interface{}, error) {
 	if len(accepts) == 0 {
 		return map[string]interface{}{}, errors.New("error not using accepts...")
@@ -123,6 +163,7 @@ func (src *Source) Scanner(accepts ...string) (map[string]interface{}, error) {
 		if err != nil {
 			return err
 		}
+
 		if entry.IsDir() {
 			return nil
 		}
@@ -138,9 +179,19 @@ func (src *Source) Scanner(accepts ...string) (map[string]interface{}, error) {
 			return err
 		}
 
-		key := strings.TrimSuffix(name, matched)
-		result[key] = parsed
+		// lấy relative path
+		rel, err := filepath.Rel(src.Dir, path)
+		if err != nil {
+			return err
+		}
 
+		// remove extension (.work)
+		key := strings.TrimSuffix(rel, matched)
+
+		// đổi slash dạng windows "\" thành "/"
+		key = filepath.ToSlash(key)
+
+		result[key] = parsed
 		return nil
 	})
 
