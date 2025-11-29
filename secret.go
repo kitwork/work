@@ -14,6 +14,6 @@
 package work
 
 func (cfg *Config) Secret(source ...string) *Config {
-	cfg.secret = cfg.source("secret", source...)
+	cfg.secret = NewSource("secret", source...)
 	return cfg
 }

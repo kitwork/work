@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,9 +26,9 @@ import (
 )
 
 type Config struct {
-	secret   Source
-	schedule Source
-	router   Source
+	secret   *Source
+	schedule *Source
+	router   *Source
 
 	data []Source
 
@@ -106,28 +107,81 @@ func (c *Config) Run() error {
 		}
 	}
 
-	// 3. Router
-	// Router
-	router, err := c.router.Scanner(accepts...)
-	if err != nil {
-		return err
-	}
-
 	// Start scheduler
 	s.Start()
 	defer func() { _ = s.Shutdown() }()
 
-	// If router exists, start Fiber alongside scheduler
-	if len(router) > 0 {
+	// 3. Router
+	// Router
+	routes, err := c.routing(accepts...)
+	if err != nil {
+		return err
+	}
 
-		fmt.Println(router)
+	// fmt.Println(c.router.Routing(".work"))
+
+	// If router exists, start Fiber alongside scheduler
+	if len(routes) > 0 {
+
 		app := fiber.New(fiber.Config{
 			DisableStartupMessage: true,
 		})
 
-		app.Get("/", func(c *fiber.Ctx) error {
-			return c.SendString("Kitwork 🌱")
-		})
+		for _, router := range routes {
+
+			switch strings.ToLower(router.Method) {
+			case "get":
+				app.Get(router.Path, func(c *fiber.Ctx) error {
+					data, err := readfile(router.Pathfile())
+					if err != nil {
+						return err
+					}
+
+					params := c.AllParams()
+					queries := c.Queries()
+					pipeRouter := pipeline.Clone()
+					pipeRouter.As("request", c)
+					pipeRouter.As("param", params)
+					pipeRouter.As("query", queries)
+					work := NewWorker(TypeRouter, data)
+					ctx := NewContext(pipeRouter)
+					if err := work.Run(ctx, "router"); err != nil {
+						return err
+					}
+					returned := ctx.Return
+
+					if ctx.Return != nil {
+						switch returned.Type {
+						case "string":
+							return c.SendString(returned.String())
+						case "html":
+							c.Set("Content-Type", "text/html")
+							return c.SendString(returned.String())
+						case "json":
+							return c.JSON(returned.JSON())
+						}
+					}
+					return c.JSON(data)
+				})
+				break
+			case "post":
+				app.Post(router.Path, func(c *fiber.Ctx) error {
+					return c.JSON(router.Path)
+				})
+				break
+			case "put":
+				app.Put(router.Path, func(c *fiber.Ctx) error {
+					return c.JSON(router.Path)
+				})
+				break
+			case "delete":
+				app.Delete(router.Path, func(c *fiber.Ctx) error {
+					return c.JSON(router.Path)
+				})
+				break
+			}
+
+		}
 
 		go func() {
 			if err := app.Listen(":3000"); err != nil {
@@ -136,7 +190,7 @@ func (c *Config) Run() error {
 		}()
 	}
 
-	fmt.Println("KitWork started. Press Ctrl+C to stop.")
+	fmt.Println("KitWork started port: 3000 . Press Ctrl+C to stop.")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

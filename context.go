@@ -19,8 +19,7 @@ import (
 )
 
 type Context struct {
-	Return interface{} // dữ liệu cuối cùng trả về khi workflow kết thúc
-	Result interface{} // dữ liệu hiện tại của workflow, được các work đọc/ghi
+	Return *Return // dữ liệu cuối cùng trả về khi workflow kết thúc
 
 	Debug bool
 
@@ -32,6 +31,10 @@ type Context struct {
 
 func NewContext(pipes *Pipeline) *Context {
 	return &Context{pipes: pipes}
+}
+
+func (c *Context) As(key string, val interface{}) error {
+	return c.pipes.As(key, val)
 }
 
 func (c *Context) template() *template.Template {

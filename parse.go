@@ -28,7 +28,7 @@ func (t *Work) Parse(ctx *Context) error {
 		return errors.New("type is not parse")
 	}
 
-	cfg := Parse{Value: ctx.Result} // mặc định lấy dữ liệu từ ctx.Data
+	cfg := Parse{} // mặc định lấy dữ liệu từ ctx.Data
 
 	if err := t.classify(ctx, &cfg); err != nil {
 		return err

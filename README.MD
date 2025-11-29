@@ -11,6 +11,9 @@ It provides the foundation for running, scheduling, and orchestrating workflows 
 
 - Lightweight and high-performance workflow engine
 - Modular architecture
+- **Control Flow**: Foreach, Switch, Wait
+- **Router**: HTTP Server for triggering workflows
+- **Observability**: Structured Logging (slog)
 - Fully compatible with KitWork CLI and Work files
 - Open-source under AGPL-3.0
 

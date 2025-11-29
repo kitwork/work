@@ -2,16 +2,19 @@ module github.com/kitwork/work
 
 go 1.25.0
 
-require gopkg.in/yaml.v3 v3.0.1
+require (
+	github.com/go-co-op/gocron/v2 v2.18.0
+	github.com/gofiber/fiber/v2 v2.52.10
+	github.com/kitwork/pipe v1.0.0
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/go-co-op/gocron/v2 v2.18.0 // indirect
-	github.com/gofiber/fiber/v2 v2.52.10 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/kitwork/pipe v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect

@@ -32,6 +32,9 @@ const (
 	TypeCommand Type = "command"
 
 	// --- Flow Control ---
+	TypeRouter Type = "router"
+
+	// --- Flow Control ---
 	TypeForeach Type = "foreach"
 
 	TypeSwitch   Type = "switch"
@@ -71,6 +74,8 @@ func TypeParse(s string) (Type, error) {
 	switch s {
 	case "fetch":
 		return TypeFetch, nil
+	case "router":
+		return TypeRouter, nil
 	case "http":
 		return TypeHTTP, nil
 	case "client":

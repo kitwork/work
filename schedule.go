@@ -25,7 +25,7 @@ import (
 )
 
 func (cfg *Config) Schedule(source ...string) *Config {
-	cfg.schedule = cfg.source("tasks", source...)
+	cfg.schedule = NewSource("tasks", source...)
 	return cfg
 }
 

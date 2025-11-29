@@ -31,16 +31,33 @@ type Work struct {
 	Timeout time.Duration
 }
 
+func (t *Work) getValue(ctx *Context) (string, error) {
+	s, _ := t.Config["value"].(string)
+	return ctx.render(s)
+}
+
+func (t *Work) value() string {
+	s, _ := t.Config["value"].(string)
+	return s
+}
+
 // ========================
 //  WORK RUNNER
 // ========================
 
 func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
+	if ctx.Return != nil {
+		return
+	}
 	fmt.Printf("\n→ Running Work: [%s] %s\n", t.Type, t.Name)
 
 	// 1. chạy work chính
 	switch t.Type {
+
+	case TypeReturn:
+		return t.Return(ctx)
+
 	case TypeScript:
 		err = t.Script(ctx)
 
@@ -49,6 +66,9 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 	case TypeCron:
 		// return nil
+
+	case TypeRouter:
+	// return nil
 
 	case TypeLog:
 		err = t.Log(ctx)
