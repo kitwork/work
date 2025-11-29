@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/go-co-op/gocron/v2 v2.18.0
 	github.com/gofiber/fiber/v2 v2.52.10
-	github.com/kitwork/pipe v1.0.0
+	github.com/kitwork/pipe v1.0.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -26,4 +26,4 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 )
 
-replace github.com/kitwork/pipe => ../pipe
+// replace github.com/kitwork/pipe => ../pipe
