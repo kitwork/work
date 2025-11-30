@@ -16,6 +16,8 @@ package work
 import (
 	"path"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 func (cfg *Config) Router(source ...string) *Config {
@@ -70,6 +72,50 @@ func NewRouter(raw string) *Router {
 }
 
 func (r *Router) Pathfile() string {
-
 	return path.Join("router", r.Source) + ".work"
+}
+
+func (r *Router) data() (map[string]interface{}, error) {
+	return readfile(path.Join("router", r.Source) + ".work")
+}
+
+func (router *Router) Handle(request *fiber.Ctx, pipeline *Pipeline) error {
+	data, err := router.data()
+	if err != nil {
+		return err
+	}
+
+	params := request.AllParams()
+	queries := request.Queries()
+	pipeRouter := pipeline.Clone()
+	pipeRouter.As("routes", request.App().GetRoutes(false))
+	pipeRouter.As("request", request)
+	pipeRouter.As("param", params)
+	pipeRouter.As("query", queries)
+	work := NewWorker(TypeRouter, data)
+	ctx := NewContext(pipeRouter)
+	if err := work.Run(ctx, "router"); err != nil {
+		return err
+	}
+	returned := ctx.Return
+
+	if ctx.Return != nil {
+		switch returned.Type {
+		case "string":
+			result := returned.String()
+			if IsJSON(result) {
+				json, err := ParseJSON(result)
+				if err == nil {
+					return request.JSON(json)
+				}
+			}
+			return request.SendString(result)
+		case "html":
+			request.Set("Content-Type", "text/html")
+			return request.SendString(returned.String())
+		case "json":
+			return request.JSON(returned.JSON())
+		}
+	}
+	return request.JSON(data)
 }

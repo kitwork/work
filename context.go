@@ -37,6 +37,10 @@ func (c *Context) As(key string, val interface{}) error {
 	return c.pipes.As(key, val)
 }
 
+func (c *Context) Getter(path string) (interface{}, bool) {
+	return c.pipes.Getter(path)
+}
+
 func (c *Context) template() *template.Template {
 	if c.templ == nil {
 		c.templ = template.New("work")

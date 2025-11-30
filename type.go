@@ -65,7 +65,8 @@ const (
 	TypeUnknow Type = "unknow"
 
 	// --- Parse /  ---
-	TypeParser Type = "parse"
+	TypeParser  Type = "parse"
+	TypeMapping Type = "mapping"
 )
 
 // TypeParse converts a string to a Type enum
@@ -119,6 +120,9 @@ func TypeParse(s string) (Type, error) {
 
 	case "parse":
 		return TypeParser, nil
+
+	case "mapping":
+		return TypeMapping, nil
 	default:
 		return "", fmt.Errorf("invalid work type: %s", s)
 	}

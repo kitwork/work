@@ -50,7 +50,7 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 	if ctx.Return != nil {
 		return
 	}
-	fmt.Printf("\n→ Running Work: [%s] %s\n", t.Type, t.Name)
+	// fmt.Printf("\n→ Running Work: [%s] %s\n", t.Type, t.Name)
 
 	// 1. chạy work chính
 	switch t.Type {
@@ -68,7 +68,11 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		// return nil
 
 	case TypeRouter:
-	// return nil
+		// return nil
+
+	case TypeMapping:
+		// return nil
+		err = t.Mapping(ctx)
 
 	case TypeLog:
 		err = t.Log(ctx)
@@ -94,18 +98,19 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		}
 	}
 
-	// 3. Nếu lỗi → chạy Error branch
-	if err != nil && len(t.Error) > 0 {
-		fmt.Printf("→ Error in [%s]: %v. Running error branch...\n", t.Name, err)
-		for _, e := range t.Error {
-			e.Run(ctx)
-		}
-	}
-	// 4. Nếu thành công → chạy Success branch
+	// 3. Nếu thành công → chạy Success branch
 	if err == nil && len(t.Success) > 0 {
 		// fmt.Println("→ Success → chạy success branch")
 		for _, s := range t.Success {
 			s.Run(ctx)
+		}
+	}
+
+	// 4. Nếu lỗi → chạy Error branch
+	if err != nil && len(t.Error) > 0 {
+		fmt.Printf("→ Error in [%s]: %v. Running error branch...\n", t.Name, err)
+		for _, e := range t.Error {
+			e.Run(ctx)
 		}
 	}
 

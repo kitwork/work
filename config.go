@@ -120,6 +120,7 @@ func (c *Config) Run() error {
 
 	// fmt.Println(c.router.Routing(".work"))
 
+	var port string
 	// If router exists, start Fiber alongside scheduler
 	if len(routes) > 0 {
 
@@ -132,65 +133,46 @@ func (c *Config) Run() error {
 			switch strings.ToLower(router.Method) {
 			case "get":
 				app.Get(router.Path, func(c *fiber.Ctx) error {
-					data, err := readfile(router.Pathfile())
-					if err != nil {
-						return err
-					}
-
-					params := c.AllParams()
-					queries := c.Queries()
-					pipeRouter := pipeline.Clone()
-					pipeRouter.As("request", c)
-					pipeRouter.As("param", params)
-					pipeRouter.As("query", queries)
-					work := NewWorker(TypeRouter, data)
-					ctx := NewContext(pipeRouter)
-					if err := work.Run(ctx, "router"); err != nil {
-						return err
-					}
-					returned := ctx.Return
-
-					if ctx.Return != nil {
-						switch returned.Type {
-						case "string":
-							return c.SendString(returned.String())
-						case "html":
-							c.Set("Content-Type", "text/html")
-							return c.SendString(returned.String())
-						case "json":
-							return c.JSON(returned.JSON())
-						}
-					}
-					return c.JSON(data)
+					return router.Handle(c, pipeline.Clone())
 				})
 				break
 			case "post":
 				app.Post(router.Path, func(c *fiber.Ctx) error {
-					return c.JSON(router.Path)
+					return router.Handle(c, pipeline.Clone())
 				})
 				break
 			case "put":
 				app.Put(router.Path, func(c *fiber.Ctx) error {
-					return c.JSON(router.Path)
+					return router.Handle(c, pipeline.Clone())
 				})
 				break
 			case "delete":
 				app.Delete(router.Path, func(c *fiber.Ctx) error {
-					return c.JSON(router.Path)
+					return router.Handle(c, pipeline.Clone())
 				})
 				break
 			}
 
 		}
 
+		port = ":80"
+
 		go func() {
-			if err := app.Listen(":3000"); err != nil {
+			if err := app.Listen(port); err != nil {
 				fmt.Println("Fiber stopped:", err)
 			}
+
+			// cfg := SSL()
+			// ln, err := tls.Listen("tcp", ":443", cfg)
+			// if err != nil {
+			// 	panic(err)
+			// }
+			// app.Listener(ln)
 		}()
+
 	}
 
-	fmt.Println("KitWork started port: 3000 . Press Ctrl+C to stop.")
+	fmt.Printf("KitWork started port: %s . Press Ctrl+C to stop.", port)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

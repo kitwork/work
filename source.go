@@ -45,17 +45,31 @@ func NewSource(name string, source ...string) *Source {
 }
 
 // files — read 1 cấp thư mục (non-recursive)
-func (src *Source) Directory(accepts ...string) string {
+func (src *Source) Directory() string {
 	if src.dir != nil {
 		return *src.dir
 	}
 	// Tạo đường dẫn từ source
-	dir := path.Join(src.list...)
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(".", dir)
-	}
+	dir := directory(src.list...)
 	src.dir = &dir
 	return *src.dir
+}
+
+func (src *Source) PathFile(name string) string {
+	return path.Join(src.Directory(), name+".work")
+}
+
+func (src *Source) HasFile(name string) bool {
+	return fileExists(src.PathFile(name))
+}
+
+func (src *Source) HasFiles(names ...string) bool {
+	for _, name := range names {
+		if src.HasFile(name) {
+			return true
+		}
+	}
+	return false
 }
 
 // WalkPaths — read all files recursively (recursive)
@@ -383,37 +397,45 @@ func directory(source ...string) string {
 	return dir
 }
 
-func router(raw string) (path string, method string) {
-
-	// Bỏ dấu / thừa
-	raw = strings.Trim(raw, "/")
-
-	parts := strings.Split(raw, "/")
-
-	// Method là phần cuối
-	method = parts[len(parts)-1]
-
-	// Path parts (bỏ method)
-	pathParts := parts[:len(parts)-1]
-
-	// Convert {id} => :id, {$} => *
-	for i, p := range pathParts {
-
-		// wildcard
-		if p == "{$}" {
-			pathParts[i] = "*"
-			continue
-		}
-
-		// param {id}
-		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
-			key := p[1 : len(p)-1] // bỏ 2 dấu {}
-			pathParts[i] = ":" + key
-		}
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true // file tồn tại
 	}
-
-	// Gộp thành path
-	path = "/" + strings.Join(pathParts, "/")
-
-	return
+	return !os.IsNotExist(err) // false nếu file không tồn tại
 }
+
+// func router(raw string) (path string, method string) {
+
+// 	// Bỏ dấu / thừa
+// 	raw = strings.Trim(raw, "/")
+
+// 	parts := strings.Split(raw, "/")
+
+// 	// Method là phần cuối
+// 	method = parts[len(parts)-1]
+
+// 	// Path parts (bỏ method)
+// 	pathParts := parts[:len(parts)-1]
+
+// 	// Convert {id} => :id, {$} => *
+// 	for i, p := range pathParts {
+
+// 		// wildcard
+// 		if p == "{$}" {
+// 			pathParts[i] = "*"
+// 			continue
+// 		}
+
+// 		// param {id}
+// 		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
+// 			key := p[1 : len(p)-1] // bỏ 2 dấu {}
+// 			pathParts[i] = ":" + key
+// 		}
+// 	}
+
+// 	// Gộp thành path
+// 	path = "/" + strings.Join(pathParts, "/")
+
+// 	return
+// }

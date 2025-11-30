@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"html/template"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/kitwork/pipe"
 )
@@ -72,4 +74,57 @@ func (p *Pipeline) Clone() *Pipeline {
 		clone[k] = v
 	}
 	return &Pipeline{funcs: clone}
+}
+
+func (p *Pipeline) Get(key string) (interface{}, bool) {
+	fn, ok := p.funcs[key]
+	if !ok {
+		return nil, false
+	}
+
+	v := reflect.ValueOf(fn).Call(nil)
+	if len(v) > 0 {
+		// unwrap reflect.Value
+		val := v[0].Interface()
+		if rv, ok := val.(reflect.Value); ok {
+			return rv.Interface(), true
+		}
+		return val, true
+	}
+	return nil, true
+}
+
+func (p *Pipeline) Getter(path string) (interface{}, bool) {
+	parts := strings.Split(path, ".")
+	if len(parts) == 0 {
+		return nil, false
+	}
+
+	// Lấy giá trị gốc từ key đầu tiên
+	val, ok := p.Get(parts[0])
+	if !ok {
+		return nil, false
+	}
+
+	// Duyệt các phần còn lại của path
+	for _, key := range parts[1:] {
+		switch v := val.(type) {
+		case map[string]interface{}:
+			val, ok = v[key]
+			if !ok {
+				return nil, false
+			}
+		case []interface{}:
+			// Nếu key là số (index)
+			idx, err := strconv.Atoi(key)
+			if err != nil || idx < 0 || idx >= len(v) {
+				return nil, false
+			}
+			val = v[idx]
+		default:
+			return nil, false
+		}
+	}
+
+	return val, true
 }
