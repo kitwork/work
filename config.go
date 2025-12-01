@@ -6,6 +6,7 @@
 package work
 
 import (
+	"crypto/tls"
 	"fmt"
 	"os"
 	"os/signal"
@@ -154,12 +155,12 @@ func (c *Config) Run() error {
 				fmt.Println("Fiber stopped:", err)
 			}
 
-			// cfg := SSL()
-			// ln, err := tls.Listen("tcp", ":443", cfg)
-			// if err != nil {
-			// 	panic(err)
-			// }
-			// app.Listener(ln)
+			cfg := SSL()
+			ln, err := tls.Listen("tcp", ":443", cfg)
+			if err != nil {
+				panic(err)
+			}
+			app.Listener(ln)
 		}()
 
 	}

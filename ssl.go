@@ -20,7 +20,7 @@ func SSL(source ...string) *tls.Config { //Tự Động tạo HTTPS -  Auto crea
 		Prompt: autocert.AcceptTOS,
 		HostPolicy: func(ctx context.Context, host string) error {
 			if !src.HasFile(host) {
-				return errors.New("host not exits auto SSL")
+				return errors.New("host not exits ssl")
 			}
 			return nil // Nil là sẽ đăng kí SSL cho tên miền này
 		}, // policy In Folder
