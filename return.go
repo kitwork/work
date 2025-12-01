@@ -16,6 +16,7 @@ type Return struct {
 	ctx     *Context
 	Type    string      `work:"type" default:"string"`
 	Content interface{} `work:"content"`
+	File    string      `work:"File"`
 }
 
 func (r *Return) String() string {
@@ -24,6 +25,15 @@ func (r *Return) String() string {
 			v, _ := r.ctx.render(s)
 			return v
 		}
+	}
+	return fmt.Sprintf("%v", r.Content) // fallback
+}
+
+func (r *Return) Page() string {
+	if r.Type == "page" {
+
+		v, _ := r.ctx.render(r.File)
+		return v
 	}
 	return fmt.Sprintf("%v", r.Content) // fallback
 }
@@ -160,6 +170,9 @@ func (t *Work) Return(ctx *Context) error {
 				case "html":
 					cfg.Type = k    // gán type
 					cfg.Content = v // gán value
+				case "page":
+					cfg.Type = k                    // gán type
+					cfg.File = fmt.Sprintf("%s", v) // gán value
 				case "string":
 					cfg.Type = k    // gán type
 					cfg.Content = v // gán value

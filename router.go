@@ -105,6 +105,9 @@ func (router *Router) Handle(request *fiber.Ctx, pipeline *Pipeline) error {
 		case "html":
 			request.Set("Content-Type", "text/html")
 			return request.SendString(returned.String())
+		case "page":
+			request.Set("Content-Type", "text/html")
+			return request.SendString(returned.Page())
 		case "json":
 			return request.JSON(returned.JSON())
 		}

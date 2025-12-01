@@ -7,6 +7,8 @@ package work
 
 import (
 	"bytes"
+	"os"
+	"strings"
 	"text/template"
 )
 
@@ -33,25 +35,53 @@ func (c *Context) Getter(path string) (interface{}, bool) {
 	return c.pipes.Getter(path)
 }
 
-func (c *Context) template() *template.Template {
+func (c *Context) template(aliases ...map[string]interface{}) *template.Template {
 	if c.templ == nil {
 		c.templ = template.New("work")
 	}
-	return c.templ.Funcs(c.pipes.Functions())
+	if len(aliases) == 0 {
+		return c.templ.Funcs(c.pipes.Functions())
+	}
+	pipes := c.pipes.Clone()
+
+	for _, alias := range aliases {
+		for k, v := range alias {
+			pipes.As(k, v)
+		}
+	}
+
+	return c.templ.Funcs(pipes.Functions())
 }
 
-func (c *Context) render(val string) (string, error) {
+func (c *Context) render(val string, aliases ...map[string]interface{}) (string, error) {
 	if val == "" {
 		return "", nil
 	}
 
-	tmpl, err := c.template().Parse(val)
+	var text string
+	tmpl := c.template(aliases...)
+
+	if strings.HasSuffix(val, ".tmpl") {
+		// Nếu là file template
+		content, err := os.ReadFile(val)
+		if err != nil {
+			return "", err
+		}
+
+		text = string(content)
+
+	} else {
+		text = val
+	}
+
+	tmple, err := tmpl.Parse(text)
+
 	if err != nil {
 		return "", err
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, c); err != nil {
+	if err := tmple.Execute(&buf, c); err != nil {
 		return "", err
 	}
 
