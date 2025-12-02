@@ -151,21 +151,26 @@ func (c *Config) Run() error {
 		port = ":80"
 
 		go func() {
-			if err := app.Listen(port); err != nil {
-				fmt.Println("Fiber stopped:", err)
+			if err := app.Listen(":80"); err != nil {
+				fmt.Println("HTTP stopped:", err)
 			}
+		}()
 
+		go func() {
 			cfg := SSL()
 			ln, err := tls.Listen("tcp", ":443", cfg)
 			if err != nil {
 				panic(err)
 			}
-			app.Listener(ln)
+
+			if err := app.Listener(ln); err != nil {
+				fmt.Println("HTTPS stopped:", err)
+			}
 		}()
 
 	}
 
-	fmt.Printf("KitWork started port: %s . Press Ctrl+C to stop.", port)
+	fmt.Printf("KitWork started port %s . Press Ctrl+C to stop.", port)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

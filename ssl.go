@@ -13,18 +13,12 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-func SSL(source ...string) *tls.Config { //Tự Động tạo HTTPS -  Auto create SSL
-	src := NewSource("ssl", source...)
+func SSL() *tls.Config { //Tự Động tạo HTTPS -  Auto create SSL
 
 	m := &autocert.Manager{
-		Prompt: autocert.AcceptTOS,
-		HostPolicy: func(ctx context.Context, host string) error {
-			if !src.HasFile(host) {
-				return errors.New("host not exits ssl")
-			}
-			return nil // Nil là sẽ đăng kí SSL cho tên miền này
-		}, // policy In Folder
-		Cache: autocert.DirCache("./certs"),
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: hostPolicy, // policy In Folder
+		Cache:      autocert.DirCache("./certs"),
 	}
 
 	return &tls.Config{
@@ -32,4 +26,12 @@ func SSL(source ...string) *tls.Config { //Tự Động tạo HTTPS -  Auto crea
 		NextProtos:     []string{"http/1.1", "acme-tls/1"},
 		// MinVersion: tls.VersionTLS12,
 	}
+}
+
+func hostPolicy(ctx context.Context, host string) error {
+	src := NewSource("ssl")
+	if !src.HasFile(host) {
+		return errors.New("host not exits ssl")
+	}
+	return nil // Nil là sẽ đăng kí SSL cho tên miền này
 }
