@@ -15,20 +15,34 @@ import (
 type Context struct {
 	Return *Return // dữ liệu cuối cùng trả về khi workflow kết thúc
 
+	returned *Return
+	debug    bool
+	version  string
+
 	Debug bool
 
 	Version string
 
 	templ *template.Template
 	pipes *Pipeline
+
+	database *Database
 }
 
 func NewContext(pipes *Pipeline) *Context {
 	return &Context{pipes: pipes}
 }
 
+func (ctx *Context) db(database *Database) *Context {
+	ctx.database = database
+	return ctx
+}
+
 func (c *Context) As(key string, val interface{}) error {
-	return c.pipes.As(key, val)
+	if key != "" {
+		return c.pipes.As(key, val)
+	}
+	return nil
 }
 
 func (c *Context) Getter(path string) (interface{}, bool) {

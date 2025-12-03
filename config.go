@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +21,8 @@ type Config struct {
 	secret   *Source
 	schedule *Source
 	router   *Source
+
+	database *Source
 
 	data []Source
 
@@ -36,6 +37,22 @@ func (c *Config) Run() error {
 
 	pipeline := NewPipe()
 	accepts := []string{".work"}
+
+	// 1. Secret
+	dbs, err := c.ConnectDB(accepts...)
+	if err != nil {
+		panic(err)
+	}
+
+	database := new(Database)
+
+	for _, db := range dbs {
+		fmt.Println("Connected DB:", db.Key)
+		defer db.SQL.Close() // nhớ đóng connection khi app shutdown
+
+		database.Add(db.Key, db.Gorm, db.IsDefault)
+
+	}
 
 	// 1. Secret
 	secret, err := c.secret.Scanner(accepts...)
@@ -122,26 +139,13 @@ func (c *Config) Run() error {
 		})
 
 		for _, router := range routes {
+			switch router.Method {
+			case "GET", "POST", "PUT", "DELETE":
 
-			switch strings.ToLower(router.Method) {
-			case "get":
-				app.Get(router.Path, func(c *fiber.Ctx) error {
-					return router.Handle(c, pipeline.Clone())
-				})
-				break
-			case "post":
-				app.Post(router.Path, func(c *fiber.Ctx) error {
-					return router.Handle(c, pipeline.Clone())
-				})
-				break
-			case "put":
-				app.Put(router.Path, func(c *fiber.Ctx) error {
-					return router.Handle(c, pipeline.Clone())
-				})
-				break
-			case "delete":
-				app.Delete(router.Path, func(c *fiber.Ctx) error {
-					return router.Handle(c, pipeline.Clone())
+				app.Add(router.Method, router.Path, func(request *fiber.Ctx) error {
+
+					ctx := NewContext(pipeline.Clone()).db(database)
+					return router.Handle(request, ctx)
 				})
 				break
 			}

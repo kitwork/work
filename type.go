@@ -18,6 +18,13 @@ const (
 	TypeClient  Type = "client"
 	TypeRequest Type = "request"
 
+	// --- Parse /  ---
+	TypeParser  Type = "parse"
+	TypeMapping Type = "mapping"
+
+	// --- Sql /  ---
+	TypeSql Type = "sql"
+
 	// --- Script / Command ---
 	TypeScript  Type = "script"
 	TypeCmd     Type = "cmd"
@@ -55,10 +62,6 @@ const (
 	// --- Custom / Fallback ---
 	TypeCustom Type = "custom"
 	TypeUnknow Type = "unknow"
-
-	// --- Parse /  ---
-	TypeParser  Type = "parse"
-	TypeMapping Type = "mapping"
 )
 
 // TypeParse converts a string to a Type enum
@@ -81,6 +84,8 @@ func TypeParse(s string) (Type, error) {
 		return TypeCommand, nil
 	case "foreach":
 		return TypeForeach, nil
+	case "sql":
+		return TypeSql, nil
 	case "routines":
 		return TypeRoutines, nil
 	// case "if":

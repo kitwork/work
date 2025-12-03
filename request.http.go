@@ -42,12 +42,7 @@ func (r *Request) HTTP(ctx *Context) error {
 		return err
 	}
 
-	// ctx.Result = result
-	if r.As != "" {
-		return ctx.As(r.As, result)
-	}
-
-	return nil
+	return ctx.As(r.As, result)
 }
 
 func (r *Request) parseResponse(resp *http.Response) (interface{}, error) {

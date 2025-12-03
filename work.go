@@ -73,6 +73,10 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 		err = t.Parse(ctx)
 
+	case TypeSql:
+
+		err = t.Sql(ctx)
+
 	case TypeForeach:
 		fmt.Println("→ foreach chưa implement")
 

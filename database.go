@@ -6,130 +6,135 @@
 package work
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strings"
+	"time"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-type SqlQuery struct {
-	DB     string   // tên database / adapter, ví dụ "postgres", "mysql"
-	Type   string   // "select", "update", "delete", "insert"
-	Table  string   // bảng chính
-	Alias  string   // optional alias
-	Fields []string // select fields
-
-	Joins  []Join                 // inner/left/right join
-	Where  *ConditionNode         // AND/OR lồng nhau
-	Group  []string               // group by fields
-	Having *ConditionNode         // having conditions
-	Order  []OrderBy              // order by fields
-	Values map[string]interface{} // cho Insert/Update
-
-	Limit  int
-	Offset int
+func (cfg *Config) Database(source ...string) *Config {
+	cfg.database = NewSource("database", source...)
+	return cfg
 }
 
-type ConditionNode struct {
-	And  []ConditionNode // các nhánh AND
-	Or   []ConditionNode // các nhánh OR
-	Leaf *LeafCondition  // leaf condition thực tế
+type Database struct {
+	defaultDB *gorm.DB
+	list      map[string]*gorm.DB
 }
 
-type LeafCondition struct {
-	Field    string
-	Operator string      // =, >, <, IN, LIKE, ...
-	Value    interface{} // giá trị
-}
-
-type Join struct {
-	Type  string // "inner", "left", "right"
-	Table string // bảng join + alias
-	On    string // điều kiện join
-}
-
-type OrderBy struct {
-	Field     string
-	Direction string // ASC / DESC
-}
-
-func applyConditionNode(db *gorm.DB, node ConditionNode) *gorm.DB {
-	if node.Leaf != nil {
-		return db.Where(fmt.Sprintf("%s %s ?", node.Leaf.Field, node.Leaf.Operator), node.Leaf.Value)
+// Add thêm một DB vào list, nếu isDefault = true hoặc list rỗng sẽ đặt làm default
+func (dbs *Database) Add(key string, gormDB *gorm.DB, isDefault bool) {
+	if dbs.list == nil {
+		dbs.list = make(map[string]*gorm.DB)
 	}
 
-	// AND node
-	for _, andNode := range node.And {
-		db = applyConditionNode(db, andNode)
+	// Nếu là DB mặc định hoặc list rỗng, gán default
+	if isDefault || dbs.defaultDB == nil {
+		dbs.defaultDB = gormDB
 	}
 
-	// OR node
-	if len(node.Or) > 0 {
-		var orDB *gorm.DB
-		for i, orNode := range node.Or {
-			if i == 0 {
-				orDB = applyConditionNode(db.Session(&gorm.Session{NewDB: true}), orNode)
-			} else {
-				orDB = orDB.Or(applyConditionNode(db.Session(&gorm.Session{NewDB: true}), orNode))
-			}
+	// Thêm vào map
+	dbs.list[key] = gormDB
+}
+
+// Get lấy DB theo key, fallback về default nếu key không tồn tại
+func (dbs *Database) Get(keys ...string) *gorm.DB {
+	if len(keys) == 0 {
+		return dbs.defaultDB
+	}
+
+	for _, key := range keys {
+		if db, ok := dbs.list[key]; ok && db != nil {
+			return db
 		}
-		db = db.Where(orDB)
 	}
 
-	return db
+	return dbs.defaultDB
 }
 
-func BuildGormQuery(db *gorm.DB, q SqlQuery) *gorm.DB {
-	g := db.Table(q.Table)
-	if q.Alias != "" {
-		g = g.Table(fmt.Sprintf("%s AS %s", q.Table, q.Alias))
-	}
-
-	if len(q.Fields) > 0 {
-		g = g.Select(strings.Join(q.Fields, ", "))
-	}
-
-	// Joins
-	for _, j := range q.Joins {
-		g = g.Joins(fmt.Sprintf("%s JOIN %s ON %s", strings.ToUpper(j.Type), j.Table, j.On))
-	}
-
-	// Where
-	if q.Where != nil {
-		g = applyConditionNode(g, *q.Where)
-	}
-
-	// Group
-	if len(q.Group) > 0 {
-		g = g.Group(strings.Join(q.Group, ", "))
-	}
-
-	// Having
-	if q.Having != nil {
-		g = applyConditionNode(g, *q.Having)
-	}
-
-	// Order
-	for _, o := range q.Order {
-		g = g.Order(fmt.Sprintf("%s %s", o.Field, o.Direction))
-	}
-
-	// Limit / Offset
-	if q.Limit > 0 {
-		g = g.Limit(q.Limit)
-	}
-	g = g.Offset(q.Offset)
-
-	return g
+type DBConnect struct {
+	SQL       *sql.DB
+	Gorm      *gorm.DB
+	Key       string // tên key từ file config, ví dụ "postgresql"
+	IsDefault bool
 }
 
-func ExecuteQuery(db *gorm.DB, q SqlQuery) ([]map[string]interface{}, error) {
-	gormQuery := BuildGormQuery(db, q)
+type DBConfig struct {
+	Type     string `json:"type"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	SSL      string `json:"ssl"`
+	Timezone string `json:"timezone"`
+	Timeout  int    `json:"timeout"`
+	MaxOpen  int    `json:"max_open"`
+	MaxIdle  int    `json:"max_idle"`
+	Lifetime int    `json:"lifetime"`
+	MaxLimit int    `json:"max_limit"`
+	Default  bool   `json:"default"`
+}
 
-	var results []map[string]interface{}
-	if err := gormQuery.Find(&results).Error; err != nil {
+// DSN tạo connection string PostgreSQL
+func (c *DBConfig) DSN() string {
+	ssl := c.SSL
+	if ssl == "" {
+		ssl = "disable"
+	}
+	return fmt.Sprintf(
+		"user=%s password=%s dbname=%s host=%s port=%d sslmode=%s TimeZone=%s",
+		c.User, c.Password, c.Name, c.Host, c.Port, ssl, c.Timezone,
+	)
+}
+
+// ConnectDB kết nối tất cả database từ file config
+func (cfg *Config) ConnectDB(accepts ...string) ([]DBConnect, error) {
+	listDB, err := cfg.database.Scanner(accepts...)
+	if err != nil {
 		return nil, err
 	}
 
-	return results, nil
+	var dbs []DBConnect
+
+	for key, raw := range listDB {
+		// raw là map[string]interface{} với các field config
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("marshal db %s: %w", key, err)
+		}
+
+		var dbCfg DBConfig
+		if err := json.Unmarshal(data, &dbCfg); err != nil {
+			return nil, fmt.Errorf("unmarshal db %s: %w", key, err)
+		}
+
+		// Mở kết nối GORM
+		gormDB, err := gorm.Open(postgres.Open(dbCfg.DSN()), &gorm.Config{})
+		if err != nil {
+			return nil, fmt.Errorf("connect db %s: %w", key, err)
+		}
+
+		// Lấy *sql.DB để quản lý connection pool và đóng
+		sqlDB, err := gormDB.DB()
+		if err != nil {
+			return nil, fmt.Errorf("get sql.DB for db %s: %w", key, err)
+		}
+
+		sqlDB.SetMaxOpenConns(dbCfg.MaxOpen)
+		sqlDB.SetMaxIdleConns(dbCfg.MaxIdle)
+		sqlDB.SetConnMaxLifetime(time.Duration(dbCfg.Lifetime) * time.Minute)
+
+		dbs = append(dbs, DBConnect{
+			Key:       key,
+			Gorm:      gormDB,
+			SQL:       sqlDB,
+			IsDefault: dbCfg.Default,
+		})
+	}
+
+	return dbs, nil
 }

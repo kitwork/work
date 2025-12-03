@@ -60,7 +60,7 @@ func NewRouter(raw string) *Router {
 		path = "/" + path
 	}
 
-	return &Router{Method: method, Path: path, Source: raw}
+	return &Router{Method: strings.ToUpper(method), Path: path, Source: raw}
 }
 
 func (r *Router) Pathfile() string {
@@ -71,21 +71,22 @@ func (r *Router) data() (map[string]interface{}, error) {
 	return readfile(path.Join("router", r.Source) + ".work")
 }
 
-func (router *Router) Handle(request *fiber.Ctx, pipeline *Pipeline) error {
+func (router *Router) Handle(request *fiber.Ctx, ctx *Context) error {
 	data, err := router.data()
 	if err != nil {
 		return err
 	}
 
+	work := NewWorker(TypeRouter, data)
+
 	params := request.AllParams()
 	queries := request.Queries()
-	pipeRouter := pipeline.Clone()
-	pipeRouter.As("routes", request.App().GetRoutes(false))
-	pipeRouter.As("request", request)
-	pipeRouter.As("param", params)
-	pipeRouter.As("query", queries)
-	work := NewWorker(TypeRouter, data)
-	ctx := NewContext(pipeRouter)
+
+	ctx.As("routes", request.App().GetRoutes(false))
+	ctx.As("request", request)
+	ctx.As("param", params)
+	ctx.As("query", queries)
+
 	if err := work.Run(ctx, "router"); err != nil {
 		return err
 	}
