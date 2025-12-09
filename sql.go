@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (t *Work) Sql(ctx *Context) error {
@@ -103,6 +104,8 @@ func (t *Work) Sql(ctx *Context) error {
 
 			case "insert", "update":
 				cfg.Type = ToString(k)
+				cfg.Table = ToString(v)
+			case "values":
 				if m, ok := v.(map[string]interface{}); ok {
 					cfg.Values = map[string]interface{}{}
 					for key, val := range m {
@@ -111,6 +114,28 @@ func (t *Work) Sql(ctx *Context) error {
 					}
 				} else {
 					return fmt.Errorf("values must be map[string]interface{} for %s", k)
+				}
+
+			case "returning":
+
+				switch val := v.(type) {
+				case string:
+					rendered, _ := ctx.render(val)
+					if rendered == "all" || rendered == "*" {
+						cfg.Returning = append(cfg.Returning, "*")
+					} else {
+						cfg.Returning = append(cfg.Returning, rendered)
+					}
+				case []string:
+					for _, s := range val {
+						rendered, _ := ctx.render(s)
+						cfg.Returning = append(cfg.Returning, rendered)
+					}
+				case []interface{}:
+					for _, item := range val {
+						s, _ := ctx.render(ToString(item))
+						cfg.Returning = append(cfg.Returning, s)
+					}
 				}
 
 			case "delete":
@@ -139,9 +164,9 @@ type SqlQuery struct {
 	Name string
 	As   string
 
-	DB     string // tên database / adapter
-	Type   string // "select", "insert", "update", "delete"
-	Table  string
+	DB   string // tên database / adapter
+	Type string // "select", "insert", "update", "delete"
+
 	Alias  string
 	Fields []string
 
@@ -150,7 +175,10 @@ type SqlQuery struct {
 	Group  []string
 	Having *ConditionNode
 	Order  []OrderBy
-	Values map[string]interface{} // insert/update
+
+	Returning []string
+	Table     string
+	Values    map[string]interface{} // insert/update
 
 	Limit  int
 	Offset int
@@ -342,12 +370,55 @@ func (q *SqlQuery) Execute() (interface{}, error) {
 			return nil, err
 		}
 		return total, nil
-
 	case "insert":
-		if err := database.Create(q.Values).Error; err != nil {
-			return nil, err
+		if q.Table == "" {
+			return nil, fmt.Errorf("missing table")
 		}
-		return nil, nil
+
+		var retCols []clause.Column
+
+		// --- CASE 3: Không truyền Returning -> trả về row affected ---
+		if len(q.Returning) == 0 {
+			query := database.ToSQL(func(tx *gorm.DB) *gorm.DB {
+				return tx.Table(q.Table).Create(q.Values)
+			})
+
+			result := database.Exec(query)
+
+			return map[string]interface{}{
+				"rows_affected": result.RowsAffected,
+			}, result.Error
+		}
+
+		// --- CASE 1 & 2: Có truyền Returning ---
+
+		// CASE 1: Returning = ["*"]
+		if len(q.Returning) == 1 && q.Returning[0] == "*" {
+			retCols = nil // RETURNING *
+		} else {
+			// CASE 2: Returning theo từng cột
+			retCols = make([]clause.Column, 0, len(q.Returning))
+			for _, col := range q.Returning {
+				retCols = append(retCols, clause.Column{Name: col})
+			}
+		}
+
+		// Build SQL
+		query := database.ToSQL(func(tx *gorm.DB) *gorm.DB {
+			if retCols == nil {
+				return tx.Table(q.Table).
+					Clauses(clause.Returning{}). // RETURNING *
+					Create(q.Values)
+			}
+
+			return tx.Table(q.Table).
+				Clauses(clause.Returning{Columns: retCols}).
+				Create(q.Values)
+		})
+
+		var out map[string]interface{}
+		err := database.Raw(query).Scan(&out).Error
+		return out, err
 
 	case "update":
 		if err := database.Updates(q.Values).Error; err != nil {
