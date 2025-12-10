@@ -14,6 +14,7 @@ import (
 type Work struct {
 	Name    string
 	As      string
+	Async   bool
 	Type    Type
 	Kind    Kind // short, full, value, list, switch
 	Config  map[string]interface{}
@@ -77,8 +78,8 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 
 		err = t.Sql(ctx)
 
-	case TypeForeach:
-		fmt.Println("→ foreach chưa implement")
+	case TypeForeach, TypeLoop:
+		err = t.Loop(ctx)
 
 	default:
 		err = fmt.Errorf("unknown work type: %s", t.Type)

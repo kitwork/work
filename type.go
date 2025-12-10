@@ -84,6 +84,9 @@ func TypeParse(s string) (Type, error) {
 		return TypeCommand, nil
 	case "foreach":
 		return TypeForeach, nil
+	case "loop":
+		return TypeLoop, nil
+
 	case "sql":
 		return TypeSql, nil
 	case "routines":
@@ -94,8 +97,7 @@ func TypeParse(s string) (Type, error) {
 		return TypeSwitch, nil
 	case "cron":
 		return TypeCron, nil
-	case "loop":
-		return TypeLoop, nil
+
 	case "return":
 		return TypeReturn, nil
 	case "wait":

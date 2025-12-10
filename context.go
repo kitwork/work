@@ -27,6 +27,8 @@ type Context struct {
 	pipes *Pipeline
 
 	database *Database
+
+	aliases []map[string]interface{}
 }
 
 func NewContext(pipes *Pipeline) *Context {
@@ -47,6 +49,11 @@ func (c *Context) As(key string, val interface{}) error {
 
 func (c *Context) Getter(path string) (interface{}, bool) {
 	return c.pipes.Getter(path)
+}
+
+func (c *Context) Aliases(aliases ...map[string]interface{}) error {
+	c.aliases = aliases
+	return nil
 }
 
 func (c *Context) template(aliases ...map[string]interface{}) *template.Template {
@@ -73,7 +80,12 @@ func (c *Context) render(val string, aliases ...map[string]interface{}) (string,
 	}
 
 	var text string
+	if len(c.aliases) > 0 {
+		aliases = c.aliases
+	}
 	tmpl := c.template(aliases...)
+
+	c.aliases = nil
 
 	if strings.HasSuffix(val, ".tmpl") {
 		// Nếu là file template
