@@ -63,6 +63,10 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 	case TypeRouter:
 		// return nil
 
+	case TypeScreenshot:
+		// return nil
+		err = t.Screenshot(ctx)
+
 	case TypeMapping:
 		// return nil
 		err = t.Mapping(ctx)

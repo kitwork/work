@@ -56,8 +56,9 @@ const (
 	TypeCheck    Type = "check"
 
 	// --- Browser Automation ---
-	TypeChrome   Type = "chrome"
-	TypeChromedp Type = "chromedp"
+	TypeChrome     Type = "chrome"
+	TypeScreenshot Type = "screenshot"
+	TypeChromedp   Type = "chromedp"
 
 	// --- Custom / Fallback ---
 	TypeCustom Type = "custom"
@@ -112,6 +113,8 @@ func TypeParse(s string) (Type, error) {
 		return TypeCheck, nil
 	case "chrome":
 		return TypeChrome, nil
+	case "screenshot":
+		return TypeScreenshot, nil
 	case "chromedp":
 		return TypeChromedp, nil
 	case "custom":

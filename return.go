@@ -29,6 +29,48 @@ func (r *Return) String() string {
 	return fmt.Sprintf("%v", r.Content) // fallback
 }
 
+func (r *Return) Png() []byte {
+	if r.Type == "png" {
+		if s, ok := r.Content.(string); ok {
+			v, _ := ToBytes(r.ctx.Get(s))
+			return v
+		}
+	}
+	return []byte(fmt.Sprintf("%v", r.Content))
+}
+
+func ToBytes(v interface{}) ([]byte, error) {
+	switch val := v.(type) {
+
+	// Nếu đã là []byte → trả luôn
+	case []byte:
+		return val, nil
+
+	// Nếu là string -> convert sang []byte
+	case string:
+		return []byte(val), nil
+
+	// Nếu là số → convert sang string rồi sang byte
+	case int, int64, float64, float32, uint:
+		return []byte(fmt.Sprint(val)), nil
+
+	// Nếu là bool
+	case bool:
+		if val {
+			return []byte("true"), nil
+		}
+		return []byte("false"), nil
+
+	// Với map hoặc struct → JSON
+	default:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
+	}
+}
+
 func (r *Return) Page() string {
 	if r.Type == "page" {
 
@@ -168,6 +210,9 @@ func (t *Work) Return(ctx *Context) error {
 			for k, v := range t.Config {
 				switch k {
 				case "html":
+					cfg.Type = k    // gán type
+					cfg.Content = v // gán value
+				case "png":
 					cfg.Type = k    // gán type
 					cfg.Content = v // gán value
 				case "page":

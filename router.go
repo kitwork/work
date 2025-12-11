@@ -82,10 +82,10 @@ func (router *Router) Handle(request *fiber.Ctx, ctx *Context) error {
 	params := request.AllParams()
 	queries := request.Queries()
 
-	ctx.As("routes", request.App().GetRoutes(false))
-	ctx.As("request", request)
-	ctx.As("param", params)
-	ctx.As("query", queries)
+	ctx.Set("routes", request.App().GetRoutes(false))
+	ctx.Set("request", request)
+	ctx.Set("params", params)
+	ctx.Set("queries", queries)
 
 	if err := work.Run(ctx, "router"); err != nil {
 		return err
@@ -109,6 +109,9 @@ func (router *Router) Handle(request *fiber.Ctx, ctx *Context) error {
 		case "page":
 			request.Set("Content-Type", "text/html")
 			return request.SendString(returned.Page())
+		case "image/png", "png":
+
+			return request.Type("png").Send(returned.Png())
 		case "json":
 			return request.JSON(returned.JSON())
 		}

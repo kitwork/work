@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-co-op/gocron/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
 type Config struct {
@@ -137,6 +138,8 @@ func (c *Config) Run() error {
 		app := fiber.New(fiber.Config{
 			DisableStartupMessage: true,
 		})
+
+		app.Use(recover.New())
 
 		for _, router := range routes {
 			switch router.Method {
