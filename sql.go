@@ -155,7 +155,7 @@ func (t *Work) Sql(ctx *Context) error {
 		return err
 	}
 
-	return ctx.As(cfg.As, result)
+	return ctx.as(result, cfg.As)
 }
 
 // SqlQuery đại diện cho một truy vấn động

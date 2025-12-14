@@ -71,6 +71,14 @@ func (t *Work) Run(ctx *Context, skipTypes ...string) (err error) {
 		// return nil
 		err = t.Mapping(ctx)
 
+	case TypeTarget:
+		// return nil
+		err = t.Target(ctx)
+
+	case TypeAs, TypeAlias:
+		// return nil
+		err = t.Alias(ctx)
+
 	case TypeLog:
 		err = t.Log(ctx)
 

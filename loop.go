@@ -62,12 +62,8 @@ func (t *Work) Loop(ctx *Context) error {
 		cfg.As = as
 	}
 	// logJSON(result)
-	// // 7️⃣ Lưu kết quả vào context nếu có as
-	if cfg.As != "" {
-		ctx.As(cfg.As, result)
-	}
 
-	return nil
+	return ctx.as(result, cfg.As)
 }
 
 func (l *Loop) Run(ctx *Context, works []*Work) ([]interface{}, error) {
@@ -76,18 +72,18 @@ func (l *Loop) Run(ctx *Context, works []*Work) ([]interface{}, error) {
 	}
 
 	// 1. Resolve source list
-	var items []interface{}
-	switch src := l.From.(type) {
-	case []interface{}:
-		items = src
-	case map[string]interface{}:
-		items = []interface{}{src}
+	// var items []interface{}
+	// switch src := l.From.(type) {
+	// case []interface{}:
+	// 	items = src
+	// case map[string]interface{}:
+	// 	items = []interface{}{src}
 
-	case string:
+	// case string:
 
-	default:
-		return nil, fmt.Errorf("loop: unsupported From type %T", src)
-	}
+	// default:
+	// 	return nil, fmt.Errorf("loop: unsupported From type %T", src)
+	// }
 
 	itemKey := l.Item
 	if itemKey == "" {
@@ -106,40 +102,40 @@ func (l *Loop) Run(ctx *Context, works []*Work) ([]interface{}, error) {
 	var result []interface{}
 
 	// 2. Loop
-	for i, raw := range items {
+	// for i, raw := range items {
 
-		// alias cho từng vòng
-		aliases := map[string]interface{}{
-			itemKey:  raw,
-			indexKey: i,
-		}
+	// 	// alias cho từng vòng
+	// 	aliases := map[string]interface{}{
+	// 		itemKey:  raw,
+	// 		indexKey: i,
+	// 	}
 
-		ctx.Aliases(aliases)
+	// 	ctx.Aliases(aliases)
 
-		// 3. Nếu async → chạy goroutine
-		// if l.Async {
-		// 	go func(raw interface{}, idx int, alias map[string]interface{}) {
-		// 		// mỗi goroutine phải set lại alias
-		// 		ctx.Aliases(alias)
+	// 	// 3. Nếu async → chạy goroutine
+	// 	// if l.Async {
+	// 	// 	go func(raw interface{}, idx int, alias map[string]interface{}) {
+	// 	// 		// mỗi goroutine phải set lại alias
+	// 	// 		ctx.Aliases(alias)
 
-		// 		for _, w := range l.Works {
-		// 			_ = w.Run(ctx) // ignore error hoặc bạn thêm cơ chế gom lỗi
-		// 		}
-		// 	}(raw, i, aliases)
+	// 	// 		for _, w := range l.Works {
+	// 	// 			_ = w.Run(ctx) // ignore error hoặc bạn thêm cơ chế gom lỗi
+	// 	// 		}
+	// 	// 	}(raw, i, aliases)
 
-		// 	continue
-		// }
+	// 	// 	continue
+	// 	// }
 
-		// 4. Run từng Work con theo thứ tự
-		for _, w := range works {
-			if err := w.Run(ctx, "loop"); err != nil {
-				return nil, err
-			}
-		}
+	// 	// 4. Run từng Work con theo thứ tự
+	// 	for _, w := range works {
+	// 		if err := w.Run(ctx, "loop"); err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
 
-		result = append(result, raw)
+	// 	result = append(result, raw)
 
-	}
+	// }
 
 	// // 5. Success branch (Loop cấp Work)
 	// for _, s := range l.Success {

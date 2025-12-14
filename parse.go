@@ -31,7 +31,7 @@ func (t *Work) Parse(ctx *Context) error {
 
 func (p *Parse) Handle(ctx *Context) error {
 	if p.Value == nil {
-		return errors.New("parse: no input data in ctx.Result")
+		return errors.New("parse: no input data in ctx.as")
 	}
 
 	switch p.To {

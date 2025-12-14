@@ -42,7 +42,7 @@ func (r *Request) HTTP(ctx *Context) error {
 		return err
 	}
 
-	return ctx.Set(r.As, result)
+	return ctx.as(result, r.As)
 }
 
 func (r *Request) parseResponse(resp *http.Response) (interface{}, error) {

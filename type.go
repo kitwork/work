@@ -21,6 +21,9 @@ const (
 	// --- Parse /  ---
 	TypeParser  Type = "parse"
 	TypeMapping Type = "mapping"
+	TypeTarget  Type = "target"
+	TypeAs      Type = "as"
+	TypeAlias   Type = "alias"
 
 	// --- Sql /  ---
 	TypeSql Type = "sql"
@@ -125,6 +128,13 @@ func TypeParse(s string) (Type, error) {
 
 	case "mapping":
 		return TypeMapping, nil
+	case "target":
+		return TypeTarget, nil
+	case "as":
+		return TypeAs, nil
+	case "alias":
+		return TypeAlias, nil
+
 	default:
 		return "", fmt.Errorf("invalid work type: %s", s)
 	}

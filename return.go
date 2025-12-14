@@ -12,13 +12,13 @@ import (
 )
 
 type Return struct {
-	// Name    string `work:"name"`
 	ctx     *Context
 	Type    string      `work:"type" default:"string"`
 	Content interface{} `work:"content"`
-	File    string      `work:"File"`
+	File    string      `work:"file"`
 }
 
+// String returns string or rendered template
 func (r *Return) String() string {
 	if r.Type == "string" || r.Type == "html" {
 		if s, ok := r.Content.(string); ok {
@@ -26,59 +26,53 @@ func (r *Return) String() string {
 			return v
 		}
 	}
-	return fmt.Sprintf("%v", r.Content) // fallback
+	return fmt.Sprintf("%v", r.Content)
 }
 
+// Png returns byte slice
 func (r *Return) Png() []byte {
-	if r.Type == "png" {
-		if s, ok := r.Content.(string); ok {
-			v, _ := ToBytes(r.ctx.Get(s))
-			return v
-		}
+	if r.Type != "png" {
+		return nil
 	}
-	return []byte(fmt.Sprintf("%v", r.Content))
-}
 
-func ToBytes(v interface{}) ([]byte, error) {
-	switch val := v.(type) {
+	switch v := r.Content.(type) {
 
-	// Nếu đã là []byte → trả luôn
 	case []byte:
-		return val, nil
+		return v
 
-	// Nếu là string -> convert sang []byte
 	case string:
-		return []byte(val), nil
-
-	// Nếu là số → convert sang string rồi sang byte
-	case int, int64, float64, float32, uint:
-		return []byte(fmt.Sprint(val)), nil
-
-	// Nếu là bool
-	case bool:
-		if val {
-			return []byte("true"), nil
-		}
-		return []byte("false"), nil
-
-	// Với map hoặc struct → JSON
-	default:
-		b, err := json.Marshal(val)
+		// chỉ resolve nếu là string template
+		val, err := r.ctx.evaluate(v)
 		if err != nil {
-			return nil, err
+			return nil
 		}
-		return b, nil
+
+		b, _ := ToBytes(val)
+		return b
+
+	default:
+		b, _ := ToBytes(v)
+		return b
 	}
 }
 
+// Page returns rendered page
 func (r *Return) Page() string {
 	if r.Type == "page" {
-
 		v, _ := r.ctx.render(r.File)
 		return v
 	}
-	return fmt.Sprintf("%v", r.Content) // fallback
+	return fmt.Sprintf("%v", r.Content)
 }
+
+// JSON returns fully resolved JSON structure
+// func (r *Return) JSON() interface{} {
+// 	if r.Type != "json" {
+// 		return nil
+// 	}
+// 	val, _ := r.ctx.json(r.Content)
+// 	return val
+// }
 
 func (r *Return) JSON() interface{} {
 	if r.Type != "json" {
@@ -89,23 +83,13 @@ func (r *Return) JSON() interface{} {
 
 	// 1️⃣ Nếu là string → render + parse JSON
 	case string:
-		v, err := r.ctx.render(c)
+		v, err := r.ctx.evaluate(c)
 		if err != nil {
 			fmt.Println("Render error:", err)
 			return nil
 		}
 
-		if !IsJSON(v) {
-			fmt.Println("Value not JSON:", v)
-			return nil
-		}
-
-		result, err := ParseJSON(v)
-		if err != nil {
-			fmt.Println("JSON unmarshal error:", err)
-			return nil
-		}
-		return result
+		return v
 
 	// 2️⃣ Nếu là map → trả trực tiếp
 	case map[string]interface{}:
@@ -133,32 +117,39 @@ func (r *Return) JSON() interface{} {
 	return result
 }
 
-func IsPipe(s string) bool {
-	s = strings.TrimSpace(s) // loại bỏ khoảng trắng đầu/cuối
-	return strings.HasPrefix(s, "{{") && strings.HasSuffix(s, "}}")
+// Convert interface{} to []byte
+func ToBytes(v interface{}) ([]byte, error) {
+	switch val := v.(type) {
+	case []byte:
+		return val, nil
+	case string:
+		return []byte(val), nil
+	case int, int64, float64, float32, uint:
+		return []byte(fmt.Sprint(val)), nil
+	case bool:
+		if val {
+			return []byte("true"), nil
+		}
+		return []byte("false"), nil
+	default:
+		return json.Marshal(val)
+	}
 }
 
+// Check if string looks like JSON
 func IsJSON(s string) bool {
 	s = strings.TrimSpace(s)
-	if s == "" {
-		return false
-	}
-
-	// JSON phải bắt đầu bằng { hoặc [
 	return (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) ||
 		(strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]"))
 }
 
+// Parse string to interface{}
 func ParseJSON(s string) (interface{}, error) {
 	var result interface{}
 	err := json.Unmarshal([]byte(s), &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return result, err
 }
 
-// RenderJSONMap recursively renders a map or slice
 func MapJSON(ctx *Context, val interface{}) interface{} {
 	switch v := val.(type) {
 
@@ -181,11 +172,8 @@ func MapJSON(ctx *Context, val interface{}) interface{} {
 	// Nếu là string → kiểm tra pipe hoặc JSON
 	case string:
 		str := strings.TrimSpace(v)
-		rendered, _ := ctx.render(str)
-		if IsJSON(rendered) {
-			parsed, _ := ParseJSON(rendered)
-			return parsed
-		}
+		rendered, _ := ctx.evaluate(str)
+
 		return rendered
 
 	// Các type khác → trả nguyên
@@ -194,51 +182,46 @@ func MapJSON(ctx *Context, val interface{}) interface{} {
 	}
 }
 
+// Return Work result
 func (t *Work) Return(ctx *Context) error {
-
-	cfg := Return{ctx: ctx}
+	cfg := &Return{ctx: ctx}
 
 	switch t.Kind {
-
 	case KindValue:
 
-		cfg.Type = "string"
-		cfg.Content = t.value()
+		val := t.value()
+		val = strings.TrimSpace(val)
+		if strings.HasPrefix(val, "$") {
+			cfg.Type = "json"
+		} else {
+			cfg.Type = "string"
+		}
+
+		cfg.Content = val
 
 	case KindFull:
 		if len(t.Config) == 1 {
 			for k, v := range t.Config {
 				switch k {
-				case "html":
-					cfg.Type = k    // gán type
-					cfg.Content = v // gán value
-				case "png":
-					cfg.Type = k    // gán type
-					cfg.Content = v // gán value
+				case "string", "html", "png", "json":
+					cfg.Type = k
+					cfg.Content = v
 				case "page":
-					cfg.Type = k                    // gán type
-					cfg.File = fmt.Sprintf("%s", v) // gán value
-				case "string":
-					cfg.Type = k    // gán type
-					cfg.Content = v // gán value
-				case "json":
-					cfg.Type = k    // gán type
-					cfg.Content = v // gán value
+					cfg.Type = k
+					cfg.File = fmt.Sprintf("%v", v)
 				case "file":
-					cfg.Type = k    // gán type
-					cfg.Content = v // gán value
+					cfg.Type = k
+					cfg.Content = v
 				default:
 					return fmt.Errorf("unknown type: %s", k)
 				}
 			}
-
 		}
 
 	default:
-		return fmt.Errorf("type is not a request/fetch type: %s", t.Type)
+		return fmt.Errorf("invalid work type: %s", t.Type)
 	}
 
-	ctx.Return = &cfg
-
+	ctx.Return = cfg
 	return nil
 }

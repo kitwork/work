@@ -48,22 +48,29 @@ func (t *Work) Screenshot(ctx *Context) error {
 		cfg.Navigate = t.value()
 
 	case KindFull:
-		for k, val := range t.Config { // bỏ len(t.Config) == 1
-			v, err := ctx.render(ToString(val))
-			if err != nil {
-				return err
-			}
+		for k, v := range t.Config { // bỏ len(t.Config) == 1
+
 			switch k {
 			case "as":
 				cfg.As = ToString(v)
 			case "navigate", "url":
-				cfg.Navigate = NormalizeURL(v)
+				val, err := ctx.evaluate(v)
+				if err != nil {
+					return err
+				}
+
+				cfg.Navigate = NormalizeURL(val)
 			case "quality":
 				cfg.Quality = ToInt(v)
 			case "element":
 				cfg.Element = ToString(v)
 			case "device":
-				name := ToString(v)
+
+				val, err := ctx.evaluate(v)
+				if err != nil {
+					return err
+				}
+				name := ToString(val)
 				switch name {
 				case "mobile":
 					cfg.Device = device.IPhone13ProMax
@@ -88,7 +95,12 @@ func (t *Work) Screenshot(ctx *Context) error {
 					cfg.Mode = "light"
 				}
 			case "delay":
-				cfg.Delay, _ = time.ParseDuration(v)
+				val, err := ctx.evaluate(v)
+				if err != nil {
+					return err
+				}
+
+				cfg.Delay, _ = time.ParseDuration(ToString(val))
 			case "block_ads":
 				cfg.Ads = ToBool(v)
 			case "trackers":
@@ -112,9 +124,8 @@ func (t *Work) Screenshot(ctx *Context) error {
 	if err != nil {
 		return err
 	}
-	ctx.Set(cfg.As, result)
 
-	return nil
+	return ctx.as(result, cfg.As)
 }
 
 func (s *Screenshot) Run() ([]byte, error) {

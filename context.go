@@ -7,8 +7,10 @@ package work
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"text/template"
@@ -17,13 +19,10 @@ import (
 )
 
 type Context struct {
-	Return *Return // dữ liệu cuối cùng trả về khi workflow kết thúc
+	Return *Return
 
-	returned *Return
-	debug    bool
-	version  string
+	Vars map[string]any
 
-	Vars    map[string]interface{}
 	Debug   bool
 	Version string
 
@@ -32,11 +31,14 @@ type Context struct {
 
 	database *Database
 
-	aliases []map[string]interface{}
+	temporary map[string]any
 }
 
 func NewContext(pipes *Pipeline) *Context {
-	return &Context{pipes: pipes}
+	return &Context{
+		pipes: pipes,
+		Vars:  make(map[string]any),
+	}
 }
 
 func (ctx *Context) db(database *Database) *Context {
@@ -44,192 +46,506 @@ func (ctx *Context) db(database *Database) *Context {
 	return ctx
 }
 
-func (c *Context) As(key string, val interface{}) error {
-	if key != "" {
-		return c.pipes.As(key, val)
+/* =========================
+   Variable core
+========================= */
+
+func normalizeKey(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", fmt.Errorf("variable key cannot be empty")
 	}
+
+	key = strings.TrimPrefix(strings.TrimSpace(key), "$")
+
+	if idx := strings.IndexByte(key, '.'); idx >= 0 {
+		key = key[:idx]
+	}
+
+	if key == "" {
+		return "", fmt.Errorf("variable key cannot be empty")
+	}
+
+	return key, nil
+}
+
+func (c *Context) set(key string, val interface{}) error {
+	k, err := normalizeKey(key)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := c.Vars[k]; ok {
+		return fmt.Errorf("variable %q already exists", k)
+	}
+
+	c.Vars[k] = val
 	return nil
 }
 
-func (c *Context) Set(key string, val interface{}) error {
-	if key == "" {
-		return fmt.Errorf("variable key cannot be empty")
+func (c *Context) target(target string, keys ...string) error {
+	target = NormalizeTarget(target, keys...)
+	result, err := c.evaluate(target)
+	if err != nil {
+		return err
 	}
 
-	// Remove leading '$'
-	if key[0] == '$' {
-		key = key[1:]
+	return c.as(result)
+}
+
+func (c *Context) alias(alias string) error {
+	result, err := c.result()
+	if err != nil {
+		return err
 	}
 
-	if key == "" {
-		return fmt.Errorf("variable key cannot be empty after removing '$'")
+	return c.as(result, alias)
+}
+
+func (c *Context) as(val any, keys ...string) error {
+	// Luôn gán result
+	c.Vars["result"] = val
+
+	// Nếu không có keys, kết thúc luôn
+	if len(keys) == 0 {
+		return nil
 	}
 
-	if c.Vars == nil {
-		c.Vars = make(map[string]interface{})
+	// Duyệt keys và set
+	for _, k := range keys {
+		if k != "" {
+			if err := c.set(k, val); err != nil {
+				return err
+			}
+		}
+
 	}
 
-	if _, exists := c.Vars[key]; exists {
-		return fmt.Errorf("variable %q already exists", key)
-	}
-
-	c.Vars[key] = val
 	return nil
 }
 
-func (c *Context) Get(key string, defaults ...interface{}) interface{} {
-	if key == "" {
-		if len(defaults) > 0 {
-			return defaults[0]
-		}
-		return ""
+func (c *Context) del(key string) {
+	k, err := normalizeKey(key)
+	if err != nil {
+		return
 	}
-
-	// Xóa dấu $ nếu có
-	if key[0] == '$' {
-		key = key[1:]
-	}
-
-	// Nếu sau khi xoá còn rỗng → trả default hoặc ""
-	if key == "" {
-		if len(defaults) > 0 {
-			return defaults[0]
-		}
-		return ""
-	}
-
-	// Lấy từ biến
-	if c.Vars != nil {
-		if v, ok := c.Vars[key]; ok {
-			return v
-		}
-	}
-
-	// fallback trả default
-	if len(defaults) > 0 {
-		return defaults[0]
-	}
-
-	return ""
+	delete(c.Vars, k)
 }
 
-func (c *Context) Getting(key string) (interface{}, bool) {
-	if c.Vars == nil {
+/* =========================
+   Getter (nested)
+========================= */
+
+func (c *Context) Getter(path string) (any, bool) {
+
+	return GetterFromMap(c.Vars, path)
+}
+
+func GetterFromMap(m map[string]any, path string) (any, bool) {
+	if m == nil || path == "" {
 		return nil, false
 	}
 
-	// Không parse gì thêm, trả đúng key luôn
-	v, ok := c.Vars[key]
-	return v, ok
-}
+	path = strings.TrimPrefix(strings.TrimSpace(path), "$")
 
-func (c *Context) Getter(path string) (interface{}, bool) {
-	return c.pipes.Getter(path)
-}
+	parts := strings.Split(path, ".")
 
-func (c *Context) Aliases(aliases ...map[string]interface{}) error {
-	c.aliases = aliases
-	return nil
-}
+	var cur any = m
 
-func (c *Context) template(aliases ...map[string]interface{}) *template.Template {
-	if c.templ == nil {
-		c.templ = template.New("work")
-	}
-	if len(aliases) == 0 {
-		return c.templ.Funcs(c.pipes.Functions())
-	}
-	pipes := c.pipes.Clone()
+	for _, key := range parts {
+		if key == "" {
+			return nil, false
+		}
 
-	for _, alias := range aliases {
-		for k, v := range alias {
-			pipes.As(k, v)
+		switch node := cur.(type) {
+		case map[string]string:
+			v, ok := node[key]
+			if !ok {
+				return nil, false
+			}
+			cur = v
+		case map[string]any:
+			v, ok := node[key]
+			if !ok {
+				return nil, false
+			}
+			cur = v
+		case []any:
+			i, err := strconv.Atoi(key)
+			if err != nil || i < 0 || i >= len(node) {
+				return nil, false
+			}
+
+			cur = node[i]
+
+		default:
+
+			return nil, false
 		}
 	}
 
-	return c.templ.Funcs(pipes.Functions())
+	return cur, true
 }
 
-func (c *Context) render(val string, aliases ...map[string]interface{}) (string, error) {
+/* =========================
+   Temporary (sandbox vars)
+========================= */
+
+func (c *Context) temp(tmp map[string]any) *Context {
+	if tmp == nil {
+		c.temporary = nil
+		return c
+	}
+
+	if c.temporary == nil {
+		c.temporary = make(map[string]any)
+	}
+
+	for k, v := range tmp {
+		nk, err := normalizeKey(k)
+		if err != nil {
+			continue
+		}
+		c.temporary[nk] = v
+	}
+
+	return c
+}
+
+func (c *Context) result(defaults ...any) (any, error) {
+	return c.evaluate("$result", defaults...)
+}
+
+func (c *Context) evaluate(in interface{}, defaults ...any) (any, error) {
+	var val string
+	switch v := in.(type) {
+	case string:
+		val = v
+	default:
+		if len(defaults) == 0 {
+			return v, nil
+		}
+		for _, def := range defaults {
+			if def == nil {
+				continue
+			}
+			if !reflect.ValueOf(def).IsZero() {
+				return def, nil
+			}
+		}
+	}
+
+	val = strings.TrimSpace(val)
 	if val == "" {
 		return "", nil
 	}
 
-	var text string
-	if len(c.aliases) > 0 {
-		aliases = c.aliases
+	if strings.HasPrefix(val, "$") {
+		// ưu tiên temporary
+		if c.temporary != nil {
+			if v, ok := GetterFromMap(c.temporary, val); ok {
+				return v, nil
+			}
+		}
+
+		if v, ok := c.Getter(val); ok {
+
+			return v, nil
+		}
 	}
-	tmpl := c.template(aliases...)
 
-	c.aliases = nil
+	return val, nil
+}
 
+// func (c *Context) Resolve(v any) (any, error) {
+// 	switch val := v.(type) {
+
+// 	case string:
+// 		val = strings.TrimSpace(val)
+// 		if val == "" {
+// 			return "", nil
+// 		}
+
+// 		needRender :=
+// 			strings.HasPrefix(val, "$") ||
+// 				strings.Contains(val, "{{")
+
+// 		if !needRender {
+// 			return val, nil
+// 		}
+
+// 		// $xxx -> {{ $xxx }}
+// 		if strings.HasPrefix(val, "$") {
+// 			val = "{{ " + val + " }}"
+// 		}
+
+// 		return c.Scalar(val)
+// 	default:
+// 		return v, nil
+// 	}
+// }
+
+/* =========================
+   Render (VIEW layer)
+========================= */
+
+func (c *Context) template() *template.Template {
+	if c.templ == nil {
+		c.templ = template.New("work").Funcs(c.pipes.Functions())
+	}
+	return c.templ
+}
+
+func loadRenderText(val string) (string, error) {
 	if strings.HasSuffix(val, ".tmpl") {
-		// Nếu là file template
-		content, err := os.ReadFile(val)
+		b, err := os.ReadFile(val)
 		if err != nil {
 			return "", err
 		}
+		return string(b), nil
+	}
+	return val, nil
+}
 
-		text = string(content)
+func (c *Context) render(val string) (string, error) {
+	if val == "" {
+		return "", nil
+	}
 
-	} else {
-		text = val
+	text, err := loadRenderText(val)
+	if err != nil {
+		return "", err
 	}
 
 	text = pipe.Preprocessor(text)
 
-	tmple, err := tmpl.Parse(text)
-
+	tpl, err := c.template().Parse(text)
 	if err != nil {
 		return "", err
 	}
 
 	var buf bytes.Buffer
-	if err := tmple.Execute(&buf, c); err != nil {
+	err = c.WithTemporary(c.temporary, func() error {
+		return tpl.Execute(&buf, c)
+	})
+	if err != nil {
 		return "", err
 	}
 
 	return buf.String(), nil
 }
 
+/* =========================
+   OPTIONAL: RenderScalar
+========================= */
+
+func (c *Context) Scalar(tpl string) (any, error) {
+
+	out, err := c.render(tpl)
+	if err != nil {
+		return nil, err
+	}
+
+	var w ValueWriter
+	_, _ = w.Write([]byte(out))
+	return w.Resolve(), nil
+}
+
+/* =========================
+   Sandbox execution
+========================= */
+
+func (c *Context) WithTemporary(tmp map[string]any, fn func() error) error {
+	if len(tmp) == 0 {
+		return fn()
+	}
+
+	if c.Vars == nil {
+		c.Vars = make(map[string]any)
+	}
+
+	backup := make(map[string]any, len(tmp))
+	applied := make([]string, 0, len(tmp))
+
+	for k, v := range tmp {
+		nk, err := normalizeKey(k)
+		if err != nil {
+			return err
+		}
+
+		if old, ok := c.Vars[nk]; ok {
+			backup[nk] = old
+		}
+
+		c.Vars[nk] = v
+		applied = append(applied, nk)
+	}
+
+	defer func() {
+		for _, k := range applied {
+			if old, ok := backup[k]; ok {
+				c.Vars[k] = old
+			} else {
+				delete(c.Vars, k)
+			}
+		}
+	}()
+
+	return fn()
+}
+
 type ValueWriter struct {
-	Value interface{}
+	buf   bytes.Buffer
+	Value any
+	wrote bool
 }
 
 func (w *ValueWriter) Write(p []byte) (int, error) {
-	// Template sẽ ghi chuỗi vào Writer
-	// Nhưng nếu chuỗi đó là một literal (số, bool...)
-	// ta convert về raw value nếu parse được.
-	s := strings.TrimSpace(string(p))
+	w.wrote = true
+	return w.buf.Write(p)
+}
 
-	// thử parse số
-	if i, err := strconv.Atoi(s); err == nil {
-		w.Value = i
-		return len(p), nil
+func (w *ValueWriter) Resolve() any {
+	if !w.wrote {
+		return ""
 	}
 
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		w.Value = f
-		return len(p), nil
-	}
-
-	// true / false
-	if s == "true" {
-		w.Value = true
-		return len(p), nil
-	}
-	if s == "false" {
-		w.Value = false
-		return len(p), nil
-	}
+	s := strings.TrimSpace(w.buf.String())
 
 	// nil
-	if s == "nil" || s == "null" {
-		w.Value = nil
-		return len(p), nil
+	if s == "" || s == "nil" || s == "null" {
+		return nil
 	}
 
-	// fallback: giữ string
-	w.Value = s
-	return len(p), nil
+	// bool
+	if s == "true" {
+		return true
+	}
+	if s == "false" {
+		return false
+	}
+
+	// int
+	if i, err := strconv.Atoi(s); err == nil {
+		return i
+	}
+
+	// float
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+
+	// fallback string
+	return s
+}
+
+func (ctx *Context) json(val any) (any, error) {
+	switch v := val.(type) {
+
+	case string:
+		res, err := ctx.evaluate(v)
+		if err != nil {
+			return nil, err
+		}
+
+		s, ok := res.(string)
+		if !ok {
+			return res, nil
+		}
+
+		s = strings.TrimSpace(s)
+		if looksLikeJSON(s) {
+			if parsed, ok := tryParseJSON(s); ok {
+				return parsed, nil
+			}
+		}
+
+		return res, nil
+
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, val := range v {
+			r, err := ctx.json(val)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = r
+		}
+		return out, nil
+
+	case []any:
+		out := make([]any, len(v))
+		for i, val := range v {
+			r, err := ctx.json(val)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = r
+		}
+		return out, nil
+
+	default:
+		return v, nil
+	}
+}
+
+func looksLikeJSON(s string) bool {
+	if s == "" {
+		return false
+	}
+	return s[0] == '{' || s[0] == '['
+}
+
+func tryParseJSON(s string) (any, bool) {
+	var v any
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+
+	if err := dec.Decode(&v); err != nil {
+		return nil, false
+	}
+
+	// ensure no trailing garbage
+	if dec.More() {
+		return nil, false
+	}
+
+	return v, true
+}
+
+func NormalizeTarget(path string, keys ...string) string {
+	path = strings.TrimSpace(path)
+
+	// 1. path absolute -> giữ nguyên
+	if strings.HasPrefix(path, "$") {
+		return path
+	}
+
+	// 2. resolve root từ keys
+	root := "$result"
+	for _, k := range keys {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if strings.HasPrefix(k, "$") {
+			root = k
+		} else {
+			root = "$" + k
+		}
+		break
+	}
+
+	// 3. empty path
+	if path == "" {
+		return root
+	}
+
+	// 4. relative path
+	if strings.HasPrefix(path, ".") {
+		return root + path
+	}
+
+	// 5. normal path
+	return root + "." + path
 }

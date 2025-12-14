@@ -21,6 +21,8 @@ type Request struct {
 	Header map[string]string `work:"header"`                      // request headers
 	Agent  Type              `work:"agent,ignore" default:"http"` // http | client
 
+	Target string `work:"agent,ignore" default:"http"` // http | client
+
 	Body  interface{} `work:"body"`
 	Parse string      `work:"parse,ignore" default:"auto"`
 

@@ -82,10 +82,10 @@ func (router *Router) Handle(request *fiber.Ctx, ctx *Context) error {
 	params := request.AllParams()
 	queries := request.Queries()
 
-	ctx.Set("routes", request.App().GetRoutes(false))
-	ctx.Set("request", request)
-	ctx.Set("params", params)
-	ctx.Set("queries", queries)
+	ctx.set("routes", request.App().GetRoutes(false))
+	ctx.set("request", request)
+	ctx.set("params", params)
+	ctx.set("queries", queries)
 
 	if err := work.Run(ctx, "router"); err != nil {
 		return err
