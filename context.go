@@ -20,6 +20,7 @@ import (
 
 type Context struct {
 	Return *Return
+	Error  error
 
 	Vars map[string]any
 
@@ -255,6 +256,67 @@ func (c *Context) evaluate(in interface{}, defaults ...any) (any, error) {
 	}
 
 	return val, nil
+}
+
+func (c *Context) evaluator(in interface{}, defaults ...any) (any, error) {
+	var val string
+
+	switch v := in.(type) {
+	case string:
+		val = strings.TrimSpace(v)
+	default:
+		if len(defaults) == 0 {
+			return v, nil
+		}
+		for _, def := range defaults {
+			if def != nil && !reflect.ValueOf(def).IsZero() {
+				return def, nil
+			}
+		}
+		return v, nil // 👈 fallback đúng
+	}
+
+	if val == "" {
+		return "", nil
+	}
+
+	// 1. Biến $
+	if strings.HasPrefix(val, "$") {
+
+		if !strings.ContainsAny(val, "|()+-*/") {
+			if c.temporary != nil {
+				if v, ok := GetterFromMap(c.temporary, val); ok {
+					return v, nil
+				}
+			}
+
+			if v, ok := c.Getter(val); ok {
+
+				return v, nil
+			}
+		}
+
+		ev := NewEvaluator(c.scope(), c.pipes.Functions())
+		return ev.Eval(val)
+	}
+
+	return val, nil
+}
+
+func (c *Context) scope() map[string]any {
+	scope := make(map[string]any)
+
+	for k, v := range c.Vars {
+		scope[k] = v
+	}
+
+	if c.temporary != nil {
+		for k, v := range c.temporary {
+			scope[k] = v
+		}
+	}
+
+	return scope
 }
 
 // func (c *Context) Resolve(v any) (any, error) {

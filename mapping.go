@@ -66,7 +66,7 @@ func ApplyTransformDeep(ctx *Context, transform map[string]interface{}, aliases 
 	for k, v := range transform {
 		switch vv := v.(type) {
 		case string:
-			rendered, err := ctx.temp(aliases).evaluate(vv)
+			rendered, err := ctx.temp(aliases).evaluator(vv)
 			if err != nil {
 				out[k] = vv // fallback giữ nguyên
 			} else {

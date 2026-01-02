@@ -12,21 +12,17 @@ import (
 
 // Work / work đại diện cho 1 work/workflow node
 type Work struct {
-	Name    string
-	As      string
-	Async   bool
-	Type    Type
-	Kind    Kind // short, full, value, list, switch
-	Config  map[string]interface{}
-	Works   []*Work // chain mặc định
-	Success []*Work // nếu OK
-	Error   []*Work // nếu lỗi
-	Timeout time.Duration
-}
-
-func (t *Work) getValue(ctx *Context) (string, error) {
-	s, _ := t.Config["value"].(string)
-	return ctx.render(s)
+	Name      string
+	Condition bool
+	As        string
+	Async     bool
+	Type      Type
+	Kind      Kind // short, full, value, list, switch
+	Config    map[string]interface{}
+	Works     []*Work // chain mặc định
+	Success   []*Work // nếu OK
+	Error     []*Work // nếu lỗi
+	Timeout   time.Duration
 }
 
 func (t *Work) value() string {
@@ -145,7 +141,7 @@ func NewWorker(typing Type, data map[string]interface{}) *Work {
 
 		case "works", "work":
 			work.Works = NewWorks(val)
-		case "success":
+		case "success", "then":
 			work.Success = NewWorks(val)
 		case "error":
 			work.Error = NewWorks(val)
@@ -159,6 +155,7 @@ func NewWorker(typing Type, data map[string]interface{}) *Work {
 				}
 			}
 		default:
+			work.Condition = true
 			work.Config[key] = val
 		}
 
@@ -200,7 +197,7 @@ func NewWork(data map[string]interface{}) *Work {
 
 				case "works", "work":
 					work.Works = NewWorks(vv)
-				case "success":
+				case "success", "then":
 					work.Success = NewWorks(vv)
 				case "error":
 					work.Error = NewWorks(vv)
