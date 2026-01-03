@@ -50,4 +50,4 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-replace github.com/kitwork/work => ../work
+replace github.com/kitwork/pipe  => "../pipe"

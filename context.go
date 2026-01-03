@@ -24,6 +24,8 @@ type Context struct {
 
 	Vars map[string]any
 
+	Errors []error
+
 	Debug   bool
 	Version string
 
@@ -280,8 +282,14 @@ func (c *Context) evaluator(in interface{}, defaults ...any) (any, error) {
 		return "", nil
 	}
 
+	if strings.HasPrefix(val, "{{") && strings.HasSuffix(val, "}}") {
+		val = strings.TrimSpace(val[2 : len(val)-2])
+	}
+
+	eval := NewEvaluator(c.scope(), c.pipes.Functions())
+
 	// 1. Biến $
-	if strings.HasPrefix(val, "$") {
+	if strings.HasPrefix(val, "$") || strings.HasPrefix(val, "($") {
 
 		if !strings.ContainsAny(val, "|()+-*/") {
 			if c.temporary != nil {
@@ -296,11 +304,10 @@ func (c *Context) evaluator(in interface{}, defaults ...any) (any, error) {
 			}
 		}
 
-		ev := NewEvaluator(c.scope(), c.pipes.Functions())
-		return ev.Eval(val)
+		return eval.Eval(val)
 	}
 
-	return val, nil
+	return eval.Template(val)
 }
 
 func (c *Context) scope() map[string]any {
