@@ -30,6 +30,15 @@ func (t *Work) value() string {
 	return s
 }
 
+func (t *Work) alias() string {
+	s, _ := t.Config["as"].(string)
+	if s != "" {
+		return s
+	}
+	alias, _ := t.Config["alias"].(string)
+	return alias
+}
+
 // ========================
 //  WORK RUNNER
 // ========================

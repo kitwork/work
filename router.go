@@ -67,6 +67,10 @@ func (r *Router) Pathfile() string {
 	return path.Join("router", r.Source) + ".work"
 }
 
+func (r *Router) Directory() string {
+	return path.Join("router")
+}
+
 func (r *Router) data() (map[string]interface{}, error) {
 	return readfile(path.Join("router", r.Source) + ".work")
 }

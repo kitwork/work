@@ -146,8 +146,7 @@ func (c *Config) Run() error {
 			case "GET", "POST", "PUT", "DELETE":
 
 				app.Add(router.Method, router.Path, func(request *fiber.Ctx) error {
-
-					ctx := NewContext(pipeline.Clone()).db(database)
+					ctx := NewContext(pipeline.Clone()).db(database).directory(router.Directory())
 					return router.Handle(request, ctx)
 				})
 				break

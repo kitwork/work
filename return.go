@@ -8,6 +8,7 @@ package work
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 )
 
@@ -191,13 +192,22 @@ func (t *Work) Return(ctx *Context) error {
 
 		val := t.value()
 		val = strings.TrimSpace(val)
-		if strings.HasPrefix(val, "$") {
-			cfg.Type = "json"
-		} else {
-			cfg.Type = "string"
-		}
+		if strings.HasSuffix(val, ".tmpl") {
+			cfg.Type = "page"
+			if val == ".tmpl" {
+				cfg.File = path.Join(ctx.dir, "index"+val)
+			} else {
+				cfg.File = val
+			}
 
-		cfg.Content = val
+		} else {
+			if strings.HasPrefix(val, "$") {
+				cfg.Type = "json"
+			} else {
+				cfg.Type = "string"
+			}
+			cfg.Content = val
+		}
 
 	case KindFull:
 		if len(t.Config) == 1 {

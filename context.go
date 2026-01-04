@@ -34,6 +34,8 @@ type Context struct {
 
 	database *Database
 
+	dir string
+
 	temporary map[string]any
 }
 
@@ -46,6 +48,11 @@ func NewContext(pipes *Pipeline) *Context {
 
 func (ctx *Context) db(database *Database) *Context {
 	ctx.database = database
+	return ctx
+}
+
+func (ctx *Context) directory(dir string) *Context {
+	ctx.dir = dir
 	return ctx
 }
 
