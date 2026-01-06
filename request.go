@@ -47,6 +47,8 @@ func (t *Work) Request(ctx *Context) error {
 		return err
 	}
 
+	fmt.Println(cfg)
+
 	cfg.As = t.alias()
 
 	return cfg.Handle(ctx)

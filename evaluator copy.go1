@@ -1,0 +1,559 @@
+package work
+
+import (
+	"fmt"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+//
+// =========================
+// TOKEN
+// =========================
+//
+
+type TokenKind int
+
+const (
+	TokenEOF TokenKind = iota
+
+	TokenIdent
+	TokenNumber
+	TokenString
+	TokenTrue
+	TokenFalse
+	TokenNull
+
+	TokenPlus
+	TokenMinus
+	TokenStar
+	TokenSlash
+
+	TokenDot
+	TokenSafeDot // ?.
+
+	TokenLParen
+	TokenRParen
+
+	TokenQuestion
+	TokenColon
+	TokenNullish // ??
+
+	TokenEQ
+	TokenNEQ
+	TokenGT
+	TokenLT
+	TokenGTE
+	TokenLTE
+
+	TokenBang
+	TokenOR  // ||
+	TokenAND // &&
+)
+
+type Token struct {
+	Kind TokenKind
+	Text string
+}
+
+//
+// =========================
+// LEXER
+// =========================
+//
+
+type Lexer struct {
+	src []rune
+	pos int
+}
+
+func NewLexer(s string) *Lexer {
+	return &Lexer{src: []rune(s)}
+}
+
+func (l *Lexer) peek() rune {
+	if l.pos >= len(l.src) {
+		return 0
+	}
+	return l.src[l.pos]
+}
+
+func (l *Lexer) next() rune {
+	ch := l.peek()
+	if ch != 0 {
+		l.pos++
+	}
+	return ch
+}
+
+func (l *Lexer) skipSpace() {
+	for {
+		ch := l.peek()
+		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+			return
+		}
+		l.next()
+	}
+}
+
+func (l *Lexer) Next() Token {
+	l.skipSpace()
+
+	ch := l.next()
+	if ch == 0 {
+		return Token{Kind: TokenEOF}
+	}
+
+	// identifier
+	if ch == '$' || isLetter(ch) {
+		start := l.pos - 1
+		for isLetterOrDigit(l.peek()) {
+			l.next()
+		}
+		txt := string(l.src[start:l.pos])
+		switch txt {
+		case "true":
+			return Token{Kind: TokenTrue}
+		case "false":
+			return Token{Kind: TokenFalse}
+		case "null", "nil":
+			return Token{Kind: TokenNull}
+		}
+		return Token{Kind: TokenIdent, Text: strings.TrimPrefix(txt, "$")}
+	}
+
+	// number
+	if isDigit(ch) {
+		start := l.pos - 1
+		for isDigit(l.peek()) || l.peek() == '.' {
+			l.next()
+		}
+		return Token{Kind: TokenNumber, Text: string(l.src[start:l.pos])}
+	}
+
+	// string
+	if ch == '"' || ch == '\'' {
+		quote := ch
+		start := l.pos
+		for l.peek() != quote && l.peek() != 0 {
+			l.next()
+		}
+		l.next()
+		return Token{Kind: TokenString, Text: string(l.src[start : l.pos-1])}
+	}
+
+	// 2-char
+	if ch == '&' && l.peek() == '&' {
+		l.next()
+		return Token{Kind: TokenAND}
+	}
+	if ch == '|' && l.peek() == '|' {
+		l.next()
+		return Token{Kind: TokenOR}
+	}
+	if ch == '?' && l.peek() == '?' {
+		l.next()
+		return Token{Kind: TokenNullish}
+	}
+	if ch == '?' && l.peek() == '.' {
+		l.next()
+		return Token{Kind: TokenSafeDot}
+	}
+	if ch == '=' && l.peek() == '=' {
+		l.next()
+		return Token{Kind: TokenEQ}
+	}
+	if ch == '!' && l.peek() == '=' {
+		l.next()
+		return Token{Kind: TokenNEQ}
+	}
+	if ch == '>' && l.peek() == '=' {
+		l.next()
+		return Token{Kind: TokenGTE}
+	}
+	if ch == '<' && l.peek() == '=' {
+		l.next()
+		return Token{Kind: TokenLTE}
+	}
+
+	switch ch {
+	case '+':
+		return Token{Kind: TokenPlus}
+	case '-':
+		return Token{Kind: TokenMinus}
+	case '*':
+		return Token{Kind: TokenStar}
+	case '/':
+		return Token{Kind: TokenSlash}
+	case '.':
+		return Token{Kind: TokenDot}
+	case '(':
+		return Token{Kind: TokenLParen}
+	case ')':
+		return Token{Kind: TokenRParen}
+	case '?':
+		return Token{Kind: TokenQuestion}
+	case ':':
+		return Token{Kind: TokenColon}
+	case '!':
+		return Token{Kind: TokenBang}
+	case '>':
+		return Token{Kind: TokenGT}
+	case '<':
+		return Token{Kind: TokenLT}
+	}
+
+	panic(fmt.Sprintf("unexpected char: %c", ch))
+}
+
+func isLetter(ch rune) bool {
+	return ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+func isDigit(ch rune) bool {
+	return ch >= '0' && ch <= '9'
+}
+func isLetterOrDigit(ch rune) bool {
+	return isLetter(ch) || isDigit(ch)
+}
+
+//
+// =========================
+// AST
+// =========================
+//
+
+type Expr interface{}
+
+type (
+	BoolExpr   struct{ V bool }
+	NullExpr   struct{}
+	NumberExpr struct{ V float64 }
+	StringExpr struct{ V string }
+	VarExpr    struct {
+		Path []string
+		Safe []bool
+	}
+	UnaryExpr struct {
+		Op TokenKind
+		X  Expr
+	}
+	BinaryExpr struct {
+		L  Expr
+		Op TokenKind
+		R  Expr
+	}
+	TernaryExpr struct{ Cond, T, F Expr }
+)
+
+//
+// =========================
+// PARSER
+// =========================
+//
+
+type Parser struct {
+	l   *Lexer
+	cur Token
+}
+
+func NewParser(s string) *Parser {
+	p := &Parser{l: NewLexer(s)}
+	p.next()
+	return p
+}
+
+func (p *Parser) next() { p.cur = p.l.Next() }
+
+func (p *Parser) eat(k TokenKind) {
+	if p.cur.Kind != k {
+		panic("unexpected token")
+	}
+	p.next()
+}
+
+func (p *Parser) parse() Expr {
+	return p.parseTernary()
+}
+
+func (p *Parser) parsePrimary() Expr {
+	t := p.cur
+	switch t.Kind {
+	case TokenTrue:
+		p.next()
+		return &BoolExpr{true}
+	case TokenFalse:
+		p.next()
+		return &BoolExpr{false}
+	case TokenNull:
+		p.next()
+		return &NullExpr{}
+	case TokenNumber:
+		p.next()
+		f, _ := strconv.ParseFloat(t.Text, 64)
+		return &NumberExpr{f}
+	case TokenString:
+		p.next()
+		return &StringExpr{t.Text}
+	case TokenIdent:
+		path := []string{t.Text}
+		safe := []bool{false}
+		p.next()
+		for p.cur.Kind == TokenDot || p.cur.Kind == TokenSafeDot {
+			isSafe := p.cur.Kind == TokenSafeDot
+			p.next()
+			path = append(path, p.cur.Text)
+			safe = append(safe, isSafe)
+			p.next()
+		}
+		return &VarExpr{path, safe}
+	case TokenLParen:
+		p.next()
+		e := p.parse()
+		p.eat(TokenRParen)
+		return e
+	}
+	panic("invalid primary")
+}
+
+func (p *Parser) parseUnary() Expr {
+	if p.cur.Kind == TokenBang {
+		p.next()
+		return &UnaryExpr{TokenBang, p.parseUnary()}
+	}
+	return p.parsePrimary()
+}
+
+func (p *Parser) parseBinary(next func() Expr, ops ...TokenKind) Expr {
+	e := next()
+	for {
+		for _, op := range ops {
+			if p.cur.Kind == op {
+				p.next()
+				e = &BinaryExpr{e, op, next()}
+				goto CONT
+			}
+		}
+		break
+	CONT:
+	}
+	return e
+}
+
+func (p *Parser) parseMul() Expr { return p.parseBinary(p.parseUnary, TokenStar, TokenSlash) }
+func (p *Parser) parseAdd() Expr { return p.parseBinary(p.parseMul, TokenPlus, TokenMinus) }
+func (p *Parser) parseCmp() Expr {
+	return p.parseBinary(p.parseAdd, TokenEQ, TokenNEQ, TokenGT, TokenLT, TokenGTE, TokenLTE)
+}
+func (p *Parser) parseAnd() Expr { return p.parseBinary(p.parseCmp, TokenAND) }
+func (p *Parser) parseOr() Expr  { return p.parseBinary(p.parseAnd, TokenOR) }
+
+func (p *Parser) parseNullish() Expr {
+	e := p.parseOr()
+	for p.cur.Kind == TokenNullish {
+		p.next()
+		e = &BinaryExpr{e, TokenNullish, p.parseOr()}
+	}
+	return e
+}
+
+func (p *Parser) parseTernary() Expr {
+	e := p.parseNullish()
+	if p.cur.Kind == TokenQuestion {
+		p.next()
+		t := p.parseTernary()
+		p.eat(TokenColon)
+		f := p.parseTernary()
+		return &TernaryExpr{e, t, f}
+	}
+	return e
+}
+
+//
+// =========================
+// EVALUATOR (JS-LIKE)
+// =========================
+//
+
+type Evaluator struct {
+	Scope map[string]any
+}
+
+func NewEvaluator(scope map[string]any) *Evaluator {
+	return &Evaluator{scope}
+}
+
+func (e *Evaluator) Eval(s string) (any, error) {
+	ast := NewParser(s).parse()
+	v := e.eval(ast)
+	if !v.IsValid() {
+		return nil, nil
+	}
+	return v.Interface(), nil
+}
+
+func (e *Evaluator) eval(ex Expr) reflect.Value {
+	switch n := ex.(type) {
+
+	case *BoolExpr:
+		return reflect.ValueOf(n.V)
+	case *NullExpr:
+		return reflect.Value{}
+	case *NumberExpr:
+		return reflect.ValueOf(n.V)
+	case *StringExpr:
+		return reflect.ValueOf(n.V)
+
+	case *VarExpr:
+		return resolve(reflect.ValueOf(e.Scope), n.Path, n.Safe)
+
+	case *UnaryExpr:
+		v := e.eval(n.X)
+		return reflect.ValueOf(!truthy(v))
+
+	case *BinaryExpr:
+		return evalBinary(e, n)
+
+	case *TernaryExpr:
+		if truthy(e.eval(n.Cond)) {
+			return e.eval(n.T)
+		}
+		return e.eval(n.F)
+	}
+	panic("unknown expr")
+}
+
+func evalBinary(e *Evaluator, b *BinaryExpr) reflect.Value {
+	l := e.eval(b.L)
+
+	switch b.Op {
+
+	case TokenAND:
+		if !truthy(l) {
+			return l
+		}
+		return e.eval(b.R)
+
+	case TokenOR:
+		if truthy(l) {
+			return l
+		}
+		return e.eval(b.R)
+
+	case TokenNullish:
+		if l.IsValid() {
+			return l
+		}
+		return e.eval(b.R)
+	}
+
+	r := e.eval(b.R)
+
+	lf, rf := toFloat(l), toFloat(r)
+
+	switch b.Op {
+	case TokenPlus:
+		return reflect.ValueOf(lf + rf)
+	case TokenMinus:
+		return reflect.ValueOf(lf - rf)
+	case TokenStar:
+		return reflect.ValueOf(lf * rf)
+	case TokenSlash:
+		return reflect.ValueOf(lf / rf)
+	case TokenEQ:
+		return reflect.ValueOf(lf == rf)
+	case TokenNEQ:
+		return reflect.ValueOf(lf != rf)
+	case TokenGT:
+		return reflect.ValueOf(lf > rf)
+	case TokenLT:
+		return reflect.ValueOf(lf < rf)
+	case TokenGTE:
+		return reflect.ValueOf(lf >= rf)
+	case TokenLTE:
+		return reflect.ValueOf(lf <= rf)
+	}
+	panic("op")
+}
+
+//
+// =========================
+// HELPERS
+// =========================
+//
+
+func truthy(v reflect.Value) bool {
+	if !v.IsValid() {
+		return false
+	}
+	v = indirect(v)
+	switch v.Kind() {
+	case reflect.Bool:
+		return v.Bool()
+	case reflect.String:
+		return v.String() != ""
+	case reflect.Int, reflect.Float64:
+		return v.Float() != 0
+	}
+	return true
+}
+
+func indirect(v reflect.Value) reflect.Value {
+	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) {
+		v = v.Elem()
+	}
+	return v
+}
+
+func toFloat(v reflect.Value) float64 {
+	if !v.IsValid() {
+		return 0
+	}
+	v = indirect(v)
+	switch v.Kind() {
+	case reflect.Int:
+		return float64(v.Int())
+	case reflect.Float64:
+		return v.Float()
+	case reflect.Bool:
+		if v.Bool() {
+			return 1
+		}
+	}
+	return 0
+}
+
+func resolve(v reflect.Value, path []string, safe []bool) reflect.Value {
+	for i, k := range path {
+		v = indirect(v)
+		if !v.IsValid() {
+			if safe[i] {
+				return reflect.Value{}
+			}
+			panic("nil access")
+		}
+		switch v.Kind() {
+		case reflect.Map:
+			v = v.MapIndex(reflect.ValueOf(k))
+		default:
+			panic("not indexable")
+		}
+	}
+	return v
+}
+
+//
+// =========================
+// TEMPLATE
+// =========================
+//
+
+func (e *Evaluator) Render(t string) string {
+	re := regexp.MustCompile(`\{\{(.+?)\}\}`)
+	return re.ReplaceAllStringFunc(t, func(m string) string {
+		expr := strings.TrimSpace(m[2 : len(m)-2])
+		v, _ := e.Eval(expr)
+		return fmt.Sprint(v)
+	})
+}

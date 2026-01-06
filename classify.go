@@ -56,11 +56,17 @@ func (t *Work) classify(ctx *Context, out interface{}) error {
 
 		if targetField.IsValid() {
 			s, _ := t.Config["value"].(string)
-			rendered, err := ctx.render(s)
+			// rendered, err := ctx.render(s)
+			// if err != nil {
+			// 	return err
+			// }
+			// targetField.SetString(rendered)
+
+			rendered, err := ctx.evaluator(s)
 			if err != nil {
 				return err
 			}
-			targetField.SetString(rendered)
+			targetField.SetString(fmt.Sprintf("%v", rendered))
 		}
 		return nil
 	}
@@ -111,15 +117,15 @@ func (t *Work) classify(ctx *Context, out interface{}) error {
 					s = ss
 				}
 			}
-			rendered, _ := ctx.render(s)
-			f.SetString(rendered)
+			rendered, _ := ctx.evaluator(s)
+			f.SetString(fmt.Sprintf("%v", rendered))
 		case reflect.Map:
 			m := reflect.MakeMap(f.Type())
 			if ok {
 				if mm, ok2 := v.(map[string]interface{}); ok2 {
 					for mk, mv := range mm {
 						ms := fmt.Sprint(mv)
-						rendered, _ := ctx.render(ms)
+						rendered, _ := ctx.evaluator(ms)
 						m.SetMapIndex(reflect.ValueOf(mk), reflect.ValueOf(rendered))
 					}
 				}

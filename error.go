@@ -16,7 +16,7 @@ func (t *Work) SetError(ctx *Context) {
 	switch t.Kind {
 	case KindValue:
 
-		val, err := ctx.evaluate(t.value())
+		val, err := ctx.evaluator(t.value())
 		if err != nil {
 			return
 		}

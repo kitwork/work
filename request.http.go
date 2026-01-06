@@ -37,6 +37,10 @@ func (r *Request) HTTP(ctx *Context) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
 	result, err := r.parseResponse(resp)
 	if err != nil {
 		return err

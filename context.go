@@ -227,52 +227,15 @@ func (c *Context) result(defaults ...any) (any, error) {
 }
 
 func (c *Context) evaluate(in interface{}, defaults ...any) (any, error) {
-	var val string
-	switch v := in.(type) {
-	case string:
-		val = v
-	default:
-		if len(defaults) == 0 {
-			return v, nil
-		}
-		for _, def := range defaults {
-			if def == nil {
-				continue
-			}
-			if !reflect.ValueOf(def).IsZero() {
-				return def, nil
-			}
-		}
-	}
-
-	val = strings.TrimSpace(val)
-	if val == "" {
-		return "", nil
-	}
-
-	if strings.HasPrefix(val, "$") {
-		// ưu tiên temporary
-		if c.temporary != nil {
-			if v, ok := GetterFromMap(c.temporary, val); ok {
-				return v, nil
-			}
-		}
-
-		if v, ok := c.Getter(val); ok {
-
-			return v, nil
-		}
-	}
-
-	return val, nil
+	return c.evaluator(in, defaults...)
 }
 
 func (c *Context) evaluator(in interface{}, defaults ...any) (any, error) {
-	var val string
-
 	switch v := in.(type) {
 	case string:
-		val = strings.TrimSpace(v)
+		eval := NewEvaluator(c.scope(), c.pipes.Functions())
+		return eval.Render(v)
+
 	default:
 		if len(defaults) == 0 {
 			return v, nil
@@ -282,45 +245,15 @@ func (c *Context) evaluator(in interface{}, defaults ...any) (any, error) {
 				return def, nil
 			}
 		}
-		return v, nil // 👈 fallback đúng
+		return v, nil
 	}
-
-	if val == "" {
-		return "", nil
-	}
-
-	if strings.HasPrefix(val, "{{") && strings.HasSuffix(val, "}}") {
-		val = strings.TrimSpace(val[2 : len(val)-2])
-	}
-
-	eval := NewEvaluator(c.scope(), c.pipes.Functions())
-
-	// 1. Biến $
-	if strings.HasPrefix(val, "$") || strings.HasPrefix(val, "($") {
-
-		if !strings.ContainsAny(val, "|()+-*/") {
-			if c.temporary != nil {
-				if v, ok := GetterFromMap(c.temporary, val); ok {
-					return v, nil
-				}
-			}
-
-			if v, ok := c.Getter(val); ok {
-
-				return v, nil
-			}
-		}
-
-		return eval.Eval(val)
-	}
-
-	return eval.Template(val)
 }
 
 func (c *Context) scope() map[string]any {
 	scope := make(map[string]any)
 
 	for k, v := range c.Vars {
+
 		scope[k] = v
 	}
 
